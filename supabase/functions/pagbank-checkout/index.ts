@@ -5,7 +5,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const PAGBANK_API_URL = "https://api.pagseguro.com";
+// Use sandbox for testing, production for live
+const PAGBANK_API_URL = Deno.env.get("PAGBANK_SANDBOX") === "true" 
+  ? "https://sandbox.api.pagseguro.com" 
+  : "https://api.pagseguro.com";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
