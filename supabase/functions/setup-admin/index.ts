@@ -17,24 +17,30 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
     const adminEmail = "stillinformatica@stillinformatica.com.br";
+    const adminPassword = "710119";
 
-    // List users to find the admin
+    // Check if user already exists
     const { data: { users }, error: listError } = await supabase.auth.admin.listUsers();
     if (listError) throw listError;
 
-    const adminUser = users.find(u => u.email === adminEmail);
+    let adminUser = users.find(u => u.email === adminEmail);
+
+    // Create user if not exists
     if (!adminUser) {
-      return new Response(JSON.stringify({ error: "Usuário não encontrado" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const { data: createData, error: createError } = await supabase.auth.admin.createUser({
+        email: adminEmail,
+        password: adminPassword,
+        email_confirm: true,
+        user_metadata: { full_name: "Still Informática" },
+      });
+      if (createError) throw createError;
+      adminUser = createData.user;
+    } else {
+      // Confirm email if not confirmed
+      await supabase.auth.admin.updateUserById(adminUser.id, {
+        email_confirm: true,
       });
     }
-
-    // Confirm email
-    const { error: updateError } = await supabase.auth.admin.updateUserById(adminUser.id, {
-      email_confirm: true,
-    });
-    if (updateError) throw updateError;
 
     // Insert admin role
     const { error: roleError } = await supabase
@@ -42,7 +48,11 @@ serve(async (req) => {
       .upsert({ user_id: adminUser.id, role: "admin" }, { onConflict: "user_id,role" });
     if (roleError) throw roleError;
 
-    return new Response(JSON.stringify({ success: true, message: "Admin configurado com sucesso!", userId: adminUser.id }), {
+    return new Response(JSON.stringify({ 
+      success: true, 
+      message: "Admin configurado com sucesso!", 
+      userId: adminUser.id 
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
