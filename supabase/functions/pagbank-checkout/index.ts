@@ -18,6 +18,9 @@ serve(async (req) => {
     const PAGBANK_TOKEN = Deno.env.get("PAGBANK_TOKEN");
     const PAGBANK_EMAIL = Deno.env.get("PAGBANK_EMAIL");
 
+    console.log("Email:", PAGBANK_EMAIL ? `${PAGBANK_EMAIL.substring(0, 5)}...` : "NOT SET");
+    console.log("Token:", PAGBANK_TOKEN ? `${PAGBANK_TOKEN.substring(0, 8)}... (length: ${PAGBANK_TOKEN.length})` : "NOT SET");
+
     if (!PAGBANK_TOKEN || !PAGBANK_EMAIL) {
       return new Response(
         JSON.stringify({ error: "PAGBANK_TOKEN ou PAGBANK_EMAIL não configurados" }),
