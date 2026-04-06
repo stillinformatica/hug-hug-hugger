@@ -100,12 +100,12 @@ export const StoreHeader = ({ searchQuery, onSearchChange }: StoreHeaderProps) =
           </div>
         </div>
 
-        <nav className="hidden md:flex items-center gap-1 pb-2 -mt-1">
+        <nav className="hidden md:flex items-center gap-1 pb-2 -mt-1 overflow-x-auto scrollbar-hide">
           {navLinks.map((link) => (
             <Link
               key={link.label}
               to={link.href}
-              className="px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg transition-colors"
+              className="px-3 py-1.5 text-sm font-medium text-muted-foreground hover:text-primary hover:bg-primary/5 rounded-lg transition-colors whitespace-nowrap shrink-0"
             >
               {link.label}
             </Link>
