@@ -5,8 +5,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// PagBank API moderna (Orders API com Bearer token)
-const PAGBANK_API_URL = "https://api.pagseguro.com";
+// PagBank Checkout API (Bearer token)
+const PAGBANK_API_URL = "https://api.pagseguro.com/checkouts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -44,10 +44,50 @@ serve(async (req) => {
       0
     );
 
-    // Montar payload da API moderna de Orders
-    const orderPayload: Record<string, unknown> = {
+    // Montar payload do Checkout API
+    const checkoutPayload: Record<string, unknown> = {
       reference_id: referenceId,
-      customer: {
+      customer_modifiable: true,
+      amount: {
+        value: totalAmount,
+        currency: "BRL",
+      },
+      payment_methods: [
+        { type: "CREDIT_CARD" },
+        { type: "DEBIT_CARD" },
+        { type: "BOLETO" },
+        { type: "PIX" },
+      ],
+      payment_methods_configs: [
+        {
+          type: "CREDIT_CARD",
+          config_options: [
+            { option: "INSTALLMENTS_LIMIT", value: "12" },
+          ],
+        },
+      ],
+      soft_descriptor: "STILLINF",
+      items: items.map(
+        (
+          item: { name: string; quantity: number; unit_amount: number; reference_id?: string },
+          index: number
+        ) => ({
+          reference_id: item.reference_id || `ITEM_${index + 1}`,
+          name: item.name,
+          quantity: item.quantity,
+          unit_amount: Math.round(item.unit_amount * 100),
+        })
+      ),
+      redirect_url: "https://hug-hug-hugger.lovable.app/?payment=success",
+      return_url: "https://hug-hug-hugger.lovable.app/",
+      notification_urls: [
+        "https://hug-hug-hugger.lovable.app/api/pagbank-webhook",
+      ],
+    };
+
+    // Adicionar dados do cliente se fornecidos
+    if (customer) {
+      (checkoutPayload as Record<string, unknown>).customer = {
         name: customer?.name || "Cliente",
         email: customer?.email || "cliente@email.com",
         tax_id: customer?.tax_id || "12345678909",
@@ -61,88 +101,19 @@ serve(async (req) => {
               },
             ]
           : [],
-      },
-      items: items.map(
-        (
-          item: { name: string; quantity: number; unit_amount: number; reference_id?: string },
-          index: number
-        ) => ({
-          reference_id: item.reference_id || `ITEM_${index + 1}`,
-          name: item.name,
-          quantity: item.quantity,
-          unit_amount: Math.round(item.unit_amount * 100), // centavos
-        })
-      ),
-      shipping: shipping
-        ? {
-            address: {
-              street: shipping.street || "",
-              number: shipping.number || "S/N",
-              complement: shipping.complement || "",
-              locality: shipping.locality || "",
-              city: shipping.city || "",
-              region_code: shipping.region_code || "",
-              country: "BRA",
-              postal_code: (shipping.postal_code || "").replace(/\D/g, ""),
-            },
-          }
-        : undefined,
-      charges: [
-        {
-          reference_id: referenceId,
-          description: `Pedido ${referenceId}`,
-          amount: {
-            value: totalAmount,
-            currency: "BRL",
-          },
-          payment_method: {
-            type: "CHECKOUT",
-            checkout: {
-              customer_modifiable: true,
-              payment_methods: [
-                { type: "CREDIT_CARD" },
-                { type: "DEBIT_CARD" },
-                { type: "BOLETO" },
-                { type: "PIX" },
-              ],
-              payment_methods_configs: [
-                {
-                  type: "CREDIT_CARD",
-                  config_options: [
-                    { option: "INSTALLMENTS_LIMIT", value: "12" },
-                  ],
-                },
-              ],
-              soft_descriptor: "STILLINF",
-              redirect_urls: {
-                return_url: "https://hug-hug-hugger.lovable.app/?payment=success",
-                cancel_url: "https://hug-hug-hugger.lovable.app/?payment=cancelled",
-              },
-            },
-          },
-        },
-      ],
-      notification_urls: [
-        "https://hug-hug-hugger.lovable.app/api/pagbank-webhook",
-      ],
-    };
-
-    // Remove shipping se undefined
-    if (!orderPayload.shipping) {
-      delete orderPayload.shipping;
+      };
     }
 
-    console.log("Creating PagBank order with modern API");
-    console.log("Payload:", JSON.stringify(orderPayload).substring(0, 500));
+    console.log("Creating PagBank checkout");
+    console.log("Payload:", JSON.stringify(checkoutPayload).substring(0, 500));
 
-    const response = await fetch(`${PAGBANK_API_URL}/orders`, {
+    const response = await fetch(PAGBANK_API_URL, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${PAGBANK_TOKEN}`,
         "Content-Type": "application/json",
-        "x-api-version": "4.0",
       },
-      body: JSON.stringify(orderPayload),
+      body: JSON.stringify(checkoutPayload),
     });
 
     const responseText = await response.text();
@@ -151,47 +122,33 @@ serve(async (req) => {
 
     if (!response.ok) {
       return new Response(
-        JSON.stringify({ error: "Erro ao criar pedido", details: responseText }),
+        JSON.stringify({ error: "Erro ao criar checkout", details: responseText }),
         { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const orderData = JSON.parse(responseText);
+    const checkoutData = JSON.parse(responseText);
 
     // Extrair link de pagamento da resposta
     let paymentUrl = "";
     
-    // Tentar extrair de links
-    if (orderData.links) {
-      const payLink = orderData.links.find(
-        (l: { rel: string; href: string }) => l.rel === "PAY" || l.rel === "pay"
+    if (checkoutData.links) {
+      const payLink = checkoutData.links.find(
+        (l: { rel: string; href: string }) =>
+          l.rel === "PAY" || l.rel === "pay" || l.rel === "REDIRECT"
       );
       if (payLink) paymentUrl = payLink.href;
-    }
-
-    // Tentar extrair de charges
-    if (!paymentUrl && orderData.charges?.[0]?.links) {
-      const payLink = orderData.charges[0].links.find(
-        (l: { rel: string; href: string }) => l.rel === "PAY" || l.rel === "pay" || l.rel === "REDIRECT"
-      );
-      if (payLink) paymentUrl = payLink.href;
-    }
-
-    // Tentar extrair payment_response
-    if (!paymentUrl && orderData.charges?.[0]?.payment_response?.raw_data?.payment_url) {
-      paymentUrl = orderData.charges[0].payment_response.raw_data.payment_url;
     }
 
     console.log("Payment URL found:", paymentUrl);
-    console.log("Order ID:", orderData.id);
+    console.log("Checkout ID:", checkoutData.id);
 
     return new Response(
       JSON.stringify({
-        order_id: orderData.id,
+        checkout_id: checkoutData.id,
         payment_url: paymentUrl,
         reference_id: referenceId,
-        status: orderData.charges?.[0]?.status || orderData.status,
-        raw: orderData,
+        status: checkoutData.status,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
