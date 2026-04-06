@@ -2,12 +2,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// PagSeguro v2 API (Checkout Redirect - works with "Pagamento via Formulário HTML")
-const PAGSEGURO_WS_URL = "https://ws.pagseguro.uol.com.br/v2/checkout";
-const PAGSEGURO_PAYMENT_URL = "https://pagseguro.uol.com.br/v2/checkout/payment.html";
+// PagBank Checkout API (Bearer token)
+const PAGBANK_API_URL = "https://api.pagseguro.com/checkouts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -16,14 +15,12 @@ serve(async (req) => {
 
   try {
     const PAGBANK_TOKEN = Deno.env.get("PAGBANK_TOKEN");
-    const PAGBANK_EMAIL = Deno.env.get("PAGBANK_EMAIL");
 
-    console.log("Email:", PAGBANK_EMAIL ? `${PAGBANK_EMAIL.substring(0, 5)}...` : "NOT SET");
     console.log("Token:", PAGBANK_TOKEN ? `${PAGBANK_TOKEN.substring(0, 8)}... (length: ${PAGBANK_TOKEN.length})` : "NOT SET");
 
-    if (!PAGBANK_TOKEN || !PAGBANK_EMAIL) {
+    if (!PAGBANK_TOKEN) {
       return new Response(
-        JSON.stringify({ error: "PAGBANK_TOKEN ou PAGBANK_EMAIL não configurados" }),
+        JSON.stringify({ error: "PAGBANK_TOKEN não configurado" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -40,89 +37,88 @@ serve(async (req) => {
 
     const referenceId = `ORDER_${Date.now()}`;
 
-    // Build XML payload for PagSeguro v2
-    let xml = `<?xml version="1.0" encoding="UTF-8"?>
-<checkout>
-  <currency>BRL</currency>
-  <reference>${referenceId}</reference>
-  <items>`;
+    // Calcular valor total em centavos
+    const totalAmount = items.reduce(
+      (sum: number, item: { unit_amount: number; quantity: number }) =>
+        sum + Math.round(item.unit_amount * 100) * item.quantity,
+      0
+    );
 
-    items.forEach((item: { name: string; quantity: number; unit_amount: number; reference_id?: string }, index: number) => {
-      xml += `
-    <item>
-      <id>${String(index + 1).padStart(4, "0")}</id>
-      <description>${escapeXml(item.name)}</description>
-      <amount>${item.unit_amount.toFixed(2)}</amount>
-      <quantity>${item.quantity}</quantity>
-    </item>`;
-    });
+    // Montar payload do Checkout API
+    const checkoutPayload: Record<string, unknown> = {
+      reference_id: referenceId,
+      customer_modifiable: true,
+      amount: {
+        value: totalAmount,
+        currency: "BRL",
+      },
+      payment_methods: [
+        { type: "CREDIT_CARD" },
+        { type: "DEBIT_CARD" },
+        { type: "BOLETO" },
+        { type: "PIX" },
+      ],
+      payment_methods_configs: [
+        {
+          type: "CREDIT_CARD",
+          config_options: [
+            { option: "INSTALLMENTS_LIMIT", value: "12" },
+          ],
+        },
+      ],
+      soft_descriptor: "STILLINF",
+      items: items.map(
+        (
+          item: { name: string; quantity: number; unit_amount: number; reference_id?: string },
+          index: number
+        ) => ({
+          reference_id: item.reference_id || `ITEM_${index + 1}`,
+          name: item.name,
+          quantity: item.quantity,
+          unit_amount: Math.round(item.unit_amount * 100),
+        })
+      ),
+      redirect_url: "https://hug-hug-hugger.lovable.app/?payment=success",
+      return_url: "https://hug-hug-hugger.lovable.app/",
+      notification_urls: [
+        "https://hug-hug-hugger.lovable.app/api/pagbank-webhook",
+      ],
+    };
 
-    xml += `
-  </items>`;
-
-    // Add customer info if provided
+    // Adicionar dados do cliente se fornecidos
     if (customer) {
-      xml += `
-  <sender>
-    <name>${escapeXml(customer.name || "")}</name>
-    <email>${escapeXml(customer.email || "")}</email>`;
-
-      if (customer.phone && customer.phone.length >= 3) {
-        const areaCode = customer.phone.substring(0, 2);
-        const number = customer.phone.substring(2);
-        xml += `
-    <phone>
-      <areaCode>${areaCode}</areaCode>
-      <number>${number}</number>
-    </phone>`;
-      }
-
-      xml += `
-  </sender>`;
+      (checkoutPayload as Record<string, unknown>).customer = {
+        name: customer?.name || "Cliente",
+        email: customer?.email || "cliente@email.com",
+        tax_id: customer?.tax_id || "12345678909",
+        phones: customer?.phone
+          ? [
+              {
+                country: "55",
+                area: customer.phone.substring(0, 2),
+                number: customer.phone.substring(2),
+                type: "MOBILE",
+              },
+            ]
+          : [],
+      };
     }
 
-    // Add shipping address if provided
-    if (shipping) {
-      xml += `
-  <shipping>
-    <addressRequired>true</addressRequired>
-    <address>
-      <street>${escapeXml(shipping.street || "")}</street>
-      <number>${escapeXml(shipping.number || "")}</number>
-      <complement>${escapeXml(shipping.complement || "")}</complement>
-      <district>${escapeXml(shipping.locality || "")}</district>
-      <city>${escapeXml(shipping.city || "")}</city>
-      <state>${escapeXml(shipping.region_code || "")}</state>
-      <country>BRA</country>
-      <postalCode>${(shipping.postal_code || "").replace(/\D/g, "")}</postalCode>
-    </address>
-  </shipping>`;
-    } else {
-      xml += `
-  <shippingAddressRequired>false</shippingAddressRequired>`;
-    }
+    console.log("Creating PagBank checkout");
+    console.log("Payload:", JSON.stringify(checkoutPayload).substring(0, 500));
 
-    xml += `
-  <timeout>25</timeout>
-  <maxAge>999999999</maxAge>
-  <maxUses>999</maxUses>
-</checkout>`;
-
-    console.log("Creating PagSeguro v2 checkout with XML payload");
-
-    const url = `${PAGSEGURO_WS_URL}?email=${encodeURIComponent(PAGBANK_EMAIL)}&token=${encodeURIComponent(PAGBANK_TOKEN)}`;
-
-    const response = await fetch(url, {
+    const response = await fetch(PAGBANK_API_URL, {
       method: "POST",
       headers: {
-        "Content-Type": "application/xml; charset=UTF-8",
+        "Authorization": `Bearer ${PAGBANK_TOKEN}`,
+        "Content-Type": "application/json",
       },
-      body: xml,
+      body: JSON.stringify(checkoutPayload),
     });
 
     const responseText = await response.text();
-    console.log("PagSeguro response status:", response.status);
-    console.log("PagSeguro response:", responseText);
+    console.log("PagBank response status:", response.status);
+    console.log("PagBank response:", responseText.substring(0, 1000));
 
     if (!response.ok) {
       return new Response(
@@ -131,43 +127,36 @@ serve(async (req) => {
       );
     }
 
-    // Parse XML response to extract checkout code
-    const codeMatch = responseText.match(/<code>(.*?)<\/code>/);
-    const dateMatch = responseText.match(/<date>(.*?)<\/date>/);
+    const checkoutData = JSON.parse(responseText);
 
-    if (!codeMatch) {
-      return new Response(
-        JSON.stringify({ error: "Código de checkout não encontrado na resposta", details: responseText }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    // Extrair link de pagamento da resposta
+    let paymentUrl = "";
+    
+    if (checkoutData.links) {
+      const payLink = checkoutData.links.find(
+        (l: { rel: string; href: string }) =>
+          l.rel === "PAY" || l.rel === "pay" || l.rel === "REDIRECT"
       );
+      if (payLink) paymentUrl = payLink.href;
     }
 
-    const checkoutCode = codeMatch[1];
-    const paymentUrl = `${PAGSEGURO_PAYMENT_URL}?code=${checkoutCode}`;
+    console.log("Payment URL found:", paymentUrl);
+    console.log("Checkout ID:", checkoutData.id);
 
     return new Response(
       JSON.stringify({
-        checkout_code: checkoutCode,
+        checkout_id: checkoutData.id,
         payment_url: paymentUrl,
         reference_id: referenceId,
-        date: dateMatch?.[1] || null,
+        status: checkoutData.status,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Checkout error:", error);
     return new Response(
-      JSON.stringify({ error: "Erro interno no servidor" }),
+      JSON.stringify({ error: "Erro interno no servidor", details: String(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
-
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
-}
