@@ -73,7 +73,7 @@ export const ProductCard = ({ product, index }: ProductCardProps) => {
               className="rounded-xl text-xs gap-1.5"
             >
               {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShoppingCart className="h-3 w-3" />}
-              Comprar
+              <span className="hidden lg:inline">Comprar</span>
             </Button>
           </div>
         </div>
