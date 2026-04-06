@@ -1,13 +1,1 @@
-project_id = "htpajkjnqnvlnxejpaar"
-
-[functions.compare-prices]
-verify_jwt = false
-
-[functions.find-alternatives]
-verify_jwt = false
-
-[functions.check-travel-prices]
-verify_jwt = false
-
-[functions.setup-admin]
-verify_jwt = false
+project_id = "zhfvxzvuegdvzufhkaqo"
