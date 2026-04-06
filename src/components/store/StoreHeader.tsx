@@ -14,11 +14,21 @@ interface StoreHeaderProps {
 }
 
 const navLinks = [
-  { label: "Produtos", href: "/" },
-  { label: "PCs Gamers", href: "/?q=pc+gamer" },
-  { label: "Componentes", href: "/?q=componente" },
-  { label: "Monitores", href: "/?q=monitor" },
-  { label: "Periféricos", href: "/?q=periferico" },
+  { label: "Todos", href: "/" },
+  { label: "Computadores Montados", href: "/?q=computadores+montados" },
+  { label: "Eletrônicos", href: "/?q=eletronicos" },
+  { label: "Fontes", href: "/?q=fontes" },
+  { label: "Gabinetes", href: "/?q=gabinetes" },
+  { label: "Kit Placa-Mãe + Processador", href: "/?q=kit+placa+mae+processador" },
+  { label: "Memórias", href: "/?q=memorias" },
+  { label: "Notebooks Peças", href: "/?q=notebooks+pecas" },
+  { label: "Notebooks Usados", href: "/?q=notebooks+usados" },
+  { label: "Periféricos", href: "/?q=perifericos" },
+  { label: "Placa de Vídeo", href: "/?q=placa+de+video" },
+  { label: "Placa-mãe", href: "/?q=placa+mae" },
+  { label: "Processador", href: "/?q=processador" },
+  { label: "Segurança", href: "/?q=seguranca" },
+  { label: "SSDs e HDs", href: "/?q=ssds+e+hds" },
 ];
 
 export const StoreHeader = ({ searchQuery, onSearchChange }: StoreHeaderProps) => {
