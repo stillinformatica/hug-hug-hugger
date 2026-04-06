@@ -14,7 +14,6 @@ serve(async (req) => {
 
   try {
     const PAGBANK_TOKEN = Deno.env.get("PAGBANK_TOKEN");
-    console.log("Token loaded:", PAGBANK_TOKEN ? `${PAGBANK_TOKEN.substring(0, 10)}... (length: ${PAGBANK_TOKEN.length})` : "NOT SET");
     if (!PAGBANK_TOKEN) {
       return new Response(JSON.stringify({ error: "PAGBANK_TOKEN não configurado" }), {
         status: 500,
@@ -34,93 +33,128 @@ serve(async (req) => {
 
     const referenceId = `ORDER_${Date.now()}`;
 
-    // Build PagBank checkout payload
-    const checkoutPayload: Record<string, unknown> = {
+    // Calculate total amount in cents
+    const totalItemsAmount = items.reduce(
+      (sum: number, item: { unit_amount: number; quantity: number }) =>
+        sum + Math.round(item.unit_amount * 100) * item.quantity,
+      0
+    );
+
+    // Build PagBank Order payload (universally available API)
+    const orderPayload: Record<string, unknown> = {
       reference_id: referenceId,
-      customer: customer ? {
-        name: customer.name,
-        email: customer.email,
-        tax_id: customer.tax_id,
-        phones: customer.phone ? [{
-          country: "55",
-          area: customer.phone.substring(0, 2),
-          number: customer.phone.substring(2),
-          type: "MOBILE",
-        }] : undefined,
-      } : undefined,
-      items: items.map((item: { name: string; quantity: number; unit_amount: number; reference_id?: string }) => ({
-        reference_id: item.reference_id || referenceId,
-        name: item.name,
-        quantity: item.quantity,
-        unit_amount: Math.round(item.unit_amount * 100), // PagBank expects cents
-      })),
-      shipping: shipping ? {
-        address: {
-          street: shipping.street,
-          number: shipping.number,
-          complement: shipping.complement || "",
-          locality: shipping.locality,
-          city: shipping.city,
-          region_code: shipping.region_code,
-          country: "BRA",
-          postal_code: shipping.postal_code,
-        },
-      } : undefined,
-      payment_methods: [
-        { type: "PIX" },
-        { type: "CREDIT_CARD" },
-        { type: "DEBIT_CARD" },
-        { type: "BOLETO" },
-      ],
-      payment_methods_configs: [
+      customer: customer
+        ? {
+            name: customer.name,
+            email: customer.email,
+            tax_id: customer.tax_id || undefined,
+            phones: customer.phone
+              ? [
+                  {
+                    country: "55",
+                    area: customer.phone.substring(0, 2),
+                    number: customer.phone.substring(2),
+                    type: "MOBILE",
+                  },
+                ]
+              : undefined,
+          }
+        : undefined,
+      items: items.map(
+        (item: {
+          name: string;
+          quantity: number;
+          unit_amount: number;
+          reference_id?: string;
+        }) => ({
+          reference_id: item.reference_id || referenceId,
+          name: item.name,
+          quantity: item.quantity,
+          unit_amount: Math.round(item.unit_amount * 100),
+        })
+      ),
+      shipping: shipping
+        ? {
+            address: {
+              street: shipping.street,
+              number: shipping.number,
+              complement: shipping.complement || "",
+              locality: shipping.locality,
+              city: shipping.city,
+              region_code: shipping.region_code,
+              country: "BRA",
+              postal_code: shipping.postal_code,
+            },
+          }
+        : undefined,
+      qr_codes: [
         {
-          type: "CREDIT_CARD",
-          config_options: [
-            { option: "INSTALLMENTS_LIMIT", value: "12" },
-          ],
+          amount: { value: totalItemsAmount },
         },
       ],
+      notification_urls: [],
     };
 
-    console.log("Creating PagBank checkout:", JSON.stringify(checkoutPayload));
+    console.log("Creating PagBank order:", JSON.stringify(orderPayload));
 
-    const response = await fetch(`${PAGBANK_API_URL}/checkouts`, {
+    const response = await fetch(`${PAGBANK_API_URL}/orders`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${PAGBANK_TOKEN}`,
       },
-      body: JSON.stringify(checkoutPayload),
+      body: JSON.stringify(orderPayload),
     });
 
     const data = await response.json();
 
     if (!response.ok) {
       console.error("PagBank error:", JSON.stringify(data));
-      return new Response(JSON.stringify({ error: "Erro ao criar checkout", details: data }), {
-        status: response.status,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Erro ao criar pedido", details: data }),
+        {
+          status: response.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
+
+    console.log("PagBank order created:", JSON.stringify(data));
+
+    // Extract PIX QR code link if available
+    const qrCode = data.qr_codes?.[0];
+    const pixLink = qrCode?.links?.find(
+      (l: { rel: string; href: string }) => l.rel === "QRCODE.PNG"
+    )?.href;
+    const pixText = qrCode?.text;
 
     // Extract payment link from response
     const paymentLink = data.links?.find(
       (l: { rel: string; href: string }) => l.rel === "PAY"
     )?.href;
 
-    return new Response(JSON.stringify({
-      checkout_id: data.id,
-      payment_url: paymentLink || null,
-      reference_id: referenceId,
-    }), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    return new Response(
+      JSON.stringify({
+        order_id: data.id,
+        payment_url: paymentLink || null,
+        pix_qr_code_url: pixLink || null,
+        pix_text: pixText || null,
+        reference_id: referenceId,
+        status: data.charges?.[0]?.status || data.status,
+      }),
+      {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
   } catch (error) {
-    console.error("Checkout error:", error);
-    return new Response(JSON.stringify({ error: "Erro interno no servidor" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("Order error:", error);
+    return new Response(
+      JSON.stringify({ error: "Erro interno no servidor" }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
   }
 });
