@@ -5,10 +5,9 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Use sandbox for testing, production for live
-const PAGBANK_API_URL = Deno.env.get("PAGBANK_SANDBOX") === "true" 
-  ? "https://sandbox.api.pagseguro.com" 
-  : "https://api.pagseguro.com";
+// PagSeguro v2 API (Checkout Redirect - works with "Pagamento via Formulário HTML")
+const PAGSEGURO_WS_URL = "https://ws.pagseguro.uol.com.br/v2/checkout";
+const PAGSEGURO_PAYMENT_URL = "https://pagseguro.uol.com.br/v2/checkout/payment.html";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -17,147 +16,155 @@ serve(async (req) => {
 
   try {
     const PAGBANK_TOKEN = Deno.env.get("PAGBANK_TOKEN");
-    if (!PAGBANK_TOKEN) {
-      return new Response(JSON.stringify({ error: "PAGBANK_TOKEN não configurado" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const PAGBANK_EMAIL = Deno.env.get("PAGBANK_EMAIL");
+
+    if (!PAGBANK_TOKEN || !PAGBANK_EMAIL) {
+      return new Response(
+        JSON.stringify({ error: "PAGBANK_TOKEN ou PAGBANK_EMAIL não configurados" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const body = await req.json();
     const { items, customer, shipping } = body;
 
     if (!items || !Array.isArray(items) || items.length === 0) {
-      return new Response(JSON.stringify({ error: "Items são obrigatórios" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ error: "Items são obrigatórios" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const referenceId = `ORDER_${Date.now()}`;
 
-    // Calculate total amount in cents
-    const totalItemsAmount = items.reduce(
-      (sum: number, item: { unit_amount: number; quantity: number }) =>
-        sum + Math.round(item.unit_amount * 100) * item.quantity,
-      0
-    );
+    // Build XML payload for PagSeguro v2
+    let xml = `<?xml version="1.0" encoding="UTF-8"?>
+<checkout>
+  <currency>BRL</currency>
+  <reference>${referenceId}</reference>
+  <items>`;
 
-    // Build PagBank Order payload (universally available API)
-    const orderPayload: Record<string, unknown> = {
-      reference_id: referenceId,
-      customer: customer
-        ? {
-            name: customer.name,
-            email: customer.email,
-            tax_id: customer.tax_id || undefined,
-            phones: customer.phone
-              ? [
-                  {
-                    country: "55",
-                    area: customer.phone.substring(0, 2),
-                    number: customer.phone.substring(2),
-                    type: "MOBILE",
-                  },
-                ]
-              : undefined,
-          }
-        : undefined,
-      items: items.map(
-        (item: {
-          name: string;
-          quantity: number;
-          unit_amount: number;
-          reference_id?: string;
-        }) => ({
-          reference_id: item.reference_id || referenceId,
-          name: item.name,
-          quantity: item.quantity,
-          unit_amount: Math.round(item.unit_amount * 100),
-        })
-      ),
-      shipping: shipping
-        ? {
-            address: {
-              street: shipping.street,
-              number: shipping.number,
-              complement: shipping.complement || "",
-              locality: shipping.locality,
-              city: shipping.city,
-              region_code: shipping.region_code,
-              country: "BRA",
-              postal_code: shipping.postal_code,
-            },
-          }
-        : undefined,
-      qr_codes: [
-        {
-          amount: { value: totalItemsAmount },
-        },
-      ],
-      notification_urls: [],
-    };
-
-    console.log("Creating PagBank order:", JSON.stringify(orderPayload));
-
-    const response = await fetch(`${PAGBANK_API_URL}/orders`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${PAGBANK_TOKEN}`,
-      },
-      body: JSON.stringify(orderPayload),
+    items.forEach((item: { name: string; quantity: number; unit_amount: number; reference_id?: string }, index: number) => {
+      xml += `
+    <item>
+      <id>${String(index + 1).padStart(4, "0")}</id>
+      <description>${escapeXml(item.name)}</description>
+      <amount>${item.unit_amount.toFixed(2)}</amount>
+      <quantity>${item.quantity}</quantity>
+    </item>`;
     });
 
-    const data = await response.json();
+    xml += `
+  </items>`;
+
+    // Add customer info if provided
+    if (customer) {
+      xml += `
+  <sender>
+    <name>${escapeXml(customer.name || "")}</name>
+    <email>${escapeXml(customer.email || "")}</email>`;
+
+      if (customer.phone && customer.phone.length >= 3) {
+        const areaCode = customer.phone.substring(0, 2);
+        const number = customer.phone.substring(2);
+        xml += `
+    <phone>
+      <areaCode>${areaCode}</areaCode>
+      <number>${number}</number>
+    </phone>`;
+      }
+
+      xml += `
+  </sender>`;
+    }
+
+    // Add shipping address if provided
+    if (shipping) {
+      xml += `
+  <shipping>
+    <addressRequired>true</addressRequired>
+    <address>
+      <street>${escapeXml(shipping.street || "")}</street>
+      <number>${escapeXml(shipping.number || "")}</number>
+      <complement>${escapeXml(shipping.complement || "")}</complement>
+      <district>${escapeXml(shipping.locality || "")}</district>
+      <city>${escapeXml(shipping.city || "")}</city>
+      <state>${escapeXml(shipping.region_code || "")}</state>
+      <country>BRA</country>
+      <postalCode>${(shipping.postal_code || "").replace(/\D/g, "")}</postalCode>
+    </address>
+  </shipping>`;
+    } else {
+      xml += `
+  <shippingAddressRequired>false</shippingAddressRequired>`;
+    }
+
+    xml += `
+  <timeout>25</timeout>
+  <maxAge>999999999</maxAge>
+  <maxUses>999</maxUses>
+</checkout>`;
+
+    console.log("Creating PagSeguro v2 checkout with XML payload");
+
+    const url = `${PAGSEGURO_WS_URL}?email=${encodeURIComponent(PAGBANK_EMAIL)}&token=${encodeURIComponent(PAGBANK_TOKEN)}`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/xml; charset=UTF-8",
+      },
+      body: xml,
+    });
+
+    const responseText = await response.text();
+    console.log("PagSeguro response status:", response.status);
+    console.log("PagSeguro response:", responseText);
 
     if (!response.ok) {
-      console.error("PagBank error:", JSON.stringify(data));
       return new Response(
-        JSON.stringify({ error: "Erro ao criar pedido", details: data }),
-        {
-          status: response.status,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
+        JSON.stringify({ error: "Erro ao criar checkout", details: responseText }),
+        { status: response.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    console.log("PagBank order created:", JSON.stringify(data));
+    // Parse XML response to extract checkout code
+    const codeMatch = responseText.match(/<code>(.*?)<\/code>/);
+    const dateMatch = responseText.match(/<date>(.*?)<\/date>/);
 
-    // Extract PIX QR code link if available
-    const qrCode = data.qr_codes?.[0];
-    const pixLink = qrCode?.links?.find(
-      (l: { rel: string; href: string }) => l.rel === "QRCODE.PNG"
-    )?.href;
-    const pixText = qrCode?.text;
+    if (!codeMatch) {
+      return new Response(
+        JSON.stringify({ error: "Código de checkout não encontrado na resposta", details: responseText }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-    // Extract payment link from response
-    const paymentLink = data.links?.find(
-      (l: { rel: string; href: string }) => l.rel === "PAY"
-    )?.href;
+    const checkoutCode = codeMatch[1];
+    const paymentUrl = `${PAGSEGURO_PAYMENT_URL}?code=${checkoutCode}`;
 
     return new Response(
       JSON.stringify({
-        order_id: data.id,
-        payment_url: paymentLink || null,
-        pix_qr_code_url: pixLink || null,
-        pix_text: pixText || null,
+        checkout_code: checkoutCode,
+        payment_url: paymentUrl,
         reference_id: referenceId,
-        status: data.charges?.[0]?.status || data.status,
+        date: dateMatch?.[1] || null,
       }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
-    console.error("Order error:", error);
+    console.error("Checkout error:", error);
     return new Response(
       JSON.stringify({ error: "Erro interno no servidor" }),
-      {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
+
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
