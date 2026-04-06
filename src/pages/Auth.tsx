@@ -28,7 +28,7 @@ const Auth = () => {
         toast.success("Login realizado com sucesso!");
         navigate("/");
       } else {
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -37,7 +37,19 @@ const Auth = () => {
           },
         });
         if (error) throw error;
-        toast.success("Cadastro realizado! Verifique seu e-mail para confirmar.");
+
+        // Try to setup admin for the specific admin email
+        if (email.toLowerCase() === "stillinformatica@stillinformatica.com.br") {
+          try {
+            await supabase.functions.invoke("setup-admin");
+            toast.success("Conta de administrador criada com sucesso! Faça login.");
+            setIsLogin(true);
+          } catch {
+            toast.success("Cadastro realizado! A configuração de admin será aplicada em breve.");
+          }
+        } else {
+          toast.success("Cadastro realizado! Verifique seu e-mail para confirmar.");
+        }
       }
     } catch (error: any) {
       toast.error(error.message || "Erro ao processar solicitação");
