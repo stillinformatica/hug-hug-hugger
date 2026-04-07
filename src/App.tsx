@@ -10,6 +10,7 @@ import Auth from "./pages/Auth";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import Checkout from "./pages/Checkout";
+import Anuncios from "./pages/Anuncios";
 
 const queryClient = new QueryClient();
 
