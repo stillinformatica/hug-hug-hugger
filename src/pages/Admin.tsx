@@ -9,9 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft, Save, MapPin, Package, Settings, Plus, Trash2, ImageIcon } from "lucide-react";
+import { Loader2, ArrowLeft, Save, MapPin, Package, Settings, Tag } from "lucide-react";
 import logo from "@/assets/logo.png";
-import type { Product } from "@/hooks/useProducts";
+import ProductsManager from "@/components/admin/ProductsManager";
+import CategoriesManager from "@/components/admin/CategoriesManager";
 
 interface SenderAddress {
   name: string;
