@@ -94,6 +94,9 @@ serve(async (req) => {
 
     console.log("Calling PagBank v2 checkout...");
     console.log("URL:", `${PAGBANK_BASE_URL}/v2/checkout`);
+    console.log("Email:", PAGBANK_EMAIL);
+    console.log("Token length:", PAGBANK_TOKEN?.length, "Token prefix:", PAGBANK_TOKEN?.substring(0, 6));
+    console.log("Body params:", params.toString().substring(0, 300));
 
     const response = await fetch(`${PAGBANK_BASE_URL}/v2/checkout`, {
       method: "POST",
