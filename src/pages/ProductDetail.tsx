@@ -42,6 +42,9 @@ const ProductDetail = () => {
   }
 
   const images = product.images || [];
+  const isConsulte = Number(product.price) === 0;
+  const productUrl = window.location.href;
+  const whatsappUrl = `https://wa.me/5511982596096?text=${encodeURIComponent(`Olá! Gostaria de saber o preço deste produto: ${product.name}\n${productUrl}`)}`;
 
   const handleAddToCart = () => {
     addItem(product);
