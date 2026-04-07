@@ -1,16 +1,18 @@
-import bannerImg from "@/assets/banner.png";
+import bannerMobile from "@/assets/banner.png";
+import bannerDesktop from "@/assets/banner-desktop.jpg";
 
 export const HeroBanner = () => {
   return (
     <section className="w-full max-w-7xl mx-auto px-4 mt-4">
       <div className="w-full rounded-2xl overflow-hidden">
-        <img
-          src={bannerImg}
-          alt="Still Informática"
-          width={1920}
-          height={512}
-          className="w-full h-auto object-contain"
-        />
+        <picture>
+          <source media="(min-width: 768px)" srcSet={bannerDesktop} />
+          <img
+            src={bannerMobile}
+            alt="Still Informática"
+            className="w-full h-auto object-contain"
+          />
+        </picture>
       </div>
     </section>
   );
