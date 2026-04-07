@@ -32,8 +32,6 @@ const emptyAddress: SenderAddress = {
 };
 
 
-
-          <TabsContent value="settings">
 const Admin = () => {
   const navigate = useNavigate();
   const { user, loading: authLoading, isAdmin } = useAuth();
