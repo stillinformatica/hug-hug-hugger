@@ -5,7 +5,7 @@ import { useCartStore } from "@/stores/cartStore";
 import { StoreHeader } from "@/components/store/StoreHeader";
 import { StoreFooter } from "@/components/store/StoreFooter";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ShoppingCart, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Loader2, ChevronLeft, ChevronRight, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 
@@ -42,6 +42,9 @@ const ProductDetail = () => {
   }
 
   const images = product.images || [];
+  const isConsulte = Number(product.price) === 0;
+  const productUrl = window.location.href;
+  const whatsappUrl = `https://wa.me/5511982596096?text=${encodeURIComponent(`Olá! Gostaria de saber o preço deste produto: ${product.name}\n${productUrl}`)}`;
 
   const handleAddToCart = () => {
     addItem(product);
@@ -118,18 +121,30 @@ const ProductDetail = () => {
               <p className="text-muted-foreground mt-3">{product.description}</p>
             </div>
 
-            <div className="text-3xl font-bold text-primary">
-              R$ {Number(product.price).toFixed(2).replace(".", ",")}
-            </div>
-
-            <Button
-              onClick={handleAddToCart}
-              size="lg"
-              className="w-full rounded-xl text-base gap-2"
-            >
-              <ShoppingCart className="h-5 w-5" />
-              Adicionar ao Carrinho
-            </Button>
+            {isConsulte ? (
+              <Button
+                onClick={() => window.open(whatsappUrl, "_blank")}
+                size="lg"
+                className="w-full rounded-xl text-base gap-2 bg-green-600 hover:bg-green-700"
+              >
+                <MessageCircle className="h-5 w-5" />
+                CONSULTE
+              </Button>
+            ) : (
+              <>
+                <div className="text-3xl font-bold text-primary">
+                  R$ {Number(product.price).toFixed(2).replace(".", ",")}
+                </div>
+                <Button
+                  onClick={handleAddToCart}
+                  size="lg"
+                  className="w-full rounded-xl text-base gap-2"
+                >
+                  <ShoppingCart className="h-5 w-5" />
+                  Adicionar ao Carrinho
+                </Button>
+              </>
+            )}
           </motion.div>
         </div>
       </main>
