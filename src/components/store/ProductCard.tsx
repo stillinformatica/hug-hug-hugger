@@ -14,6 +14,16 @@ interface ProductCardProps {
 export const ProductCard = ({ product, index }: ProductCardProps) => {
   const addItem = useCartStore(state => state.addItem);
   const image = product.images?.[0];
+  const isConsulte = Number(product.price) === 0;
+
+  const productUrl = `${window.location.origin}/produto/${product.id}`;
+  const whatsappUrl = `https://wa.me/5511982596096?text=${encodeURIComponent(`Olá! Gostaria de saber o preço deste produto: ${product.name}\n${productUrl}`)}`;
+
+  const handleConsulte = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    window.open(whatsappUrl, "_blank");
+  };
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
