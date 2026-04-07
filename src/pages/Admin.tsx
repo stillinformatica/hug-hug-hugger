@@ -12,7 +12,6 @@ import { toast } from "sonner";
 import { Loader2, ArrowLeft, Save, MapPin, Package, Settings, Plus, Trash2, ImageIcon } from "lucide-react";
 import logo from "@/assets/logo.png";
 import type { Product } from "@/hooks/useProducts";
-import logo from "@/assets/logo.png";
 
 interface SenderAddress {
   name: string;
