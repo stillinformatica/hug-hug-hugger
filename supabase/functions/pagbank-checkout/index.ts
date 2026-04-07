@@ -5,8 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// PagBank API moderna - tenta múltiplos endpoints
-const PAGBANK_BASE_URL = "https://sandbox.api.pagseguro.com";
+const PAGBANK_BASE_URL = "https://ws.sandbox.pagseguro.uol.com.br";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -15,12 +14,11 @@ serve(async (req) => {
 
   try {
     const PAGBANK_TOKEN = Deno.env.get("PAGBANK_TOKEN");
+    const PAGBANK_EMAIL = Deno.env.get("PAGBANK_EMAIL");
 
-    console.log("Token:", PAGBANK_TOKEN ? `${PAGBANK_TOKEN.substring(0, 8)}... (length: ${PAGBANK_TOKEN.length})` : "NOT SET");
-
-    if (!PAGBANK_TOKEN) {
+    if (!PAGBANK_TOKEN || !PAGBANK_EMAIL) {
       return new Response(
-        JSON.stringify({ error: "PAGBANK_TOKEN não configurado" }),
+        JSON.stringify({ error: "PAGBANK_TOKEN ou PAGBANK_EMAIL não configurado" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -37,179 +35,116 @@ serve(async (req) => {
 
     const referenceId = `ORDER_${Date.now()}`;
 
-    // Calcular valor total em centavos
+    // Construir XML para API v2 do PagSeguro
     const totalAmount = items.reduce(
       (sum: number, item: { unit_amount: number; quantity: number }) =>
-        sum + Math.round(item.unit_amount * 100) * item.quantity,
+        sum + item.unit_amount * item.quantity,
       0
-    );
+    ).toFixed(2);
 
-    const authHeaders = {
-      "Authorization": `Bearer ${PAGBANK_TOKEN}`,
-      "Content-Type": "application/json",
-    };
+    // Construir itens no formato de query string (API v2 usa application/x-www-form-urlencoded)
+    const params = new URLSearchParams();
+    params.append("email", PAGBANK_EMAIL);
+    params.append("token", PAGBANK_TOKEN);
+    params.append("currency", "BRL");
+    params.append("reference", referenceId);
+    params.append("redirectURL", "https://hug-hug-hugger.lovable.app/?payment=success");
+    params.append("notificationURL", "https://hug-hug-hugger.lovable.app/api/pagbank-webhook");
 
-    const itemsPayload = items.map(
-      (
-        item: { name: string; quantity: number; unit_amount: number; reference_id?: string },
-        index: number
-      ) => ({
-        reference_id: item.reference_id || `ITEM_${index + 1}`,
-        name: item.name.substring(0, 65),
-        quantity: item.quantity,
-        unit_amount: Math.round(item.unit_amount * 100),
-      })
-    );
+    // Adicionar itens
+    items.forEach((item: { name: string; quantity: number; unit_amount: number }, index: number) => {
+      const i = index + 1;
+      params.append(`itemId${i}`, String(i));
+      params.append(`itemDescription${i}`, item.name.substring(0, 100));
+      params.append(`itemAmount${i}`, item.unit_amount.toFixed(2));
+      params.append(`itemQuantity${i}`, String(item.quantity));
+    });
 
-    const customerPayload = customer
-      ? {
-          name: (customer.name || "Cliente").substring(0, 30),
-          email: customer.email || "cliente@email.com",
-          tax_id: (customer.tax_id || "12345678909").replace(/\D/g, ""),
-          phones: customer.phone
-            ? [
-                {
-                  country: "55",
-                  area: customer.phone.substring(0, 2),
-                  number: customer.phone.substring(2, 11),
-                  type: "MOBILE",
-                },
-              ]
-            : [],
-        }
-      : undefined;
+    // Dados do comprador (opcional)
+    if (customer) {
+      if (customer.name) params.append("senderName", customer.name.substring(0, 50));
+      if (customer.email) {
+        // No sandbox, o email precisa ter @sandbox.pagseguro.com.br
+        const senderEmail = customer.email.includes("@sandbox.pagseguro.com.br")
+          ? customer.email
+          : `${customer.email.split("@")[0]}@sandbox.pagseguro.com.br`;
+        params.append("senderEmail", senderEmail);
+      }
+      if (customer.phone) {
+        params.append("senderAreaCode", customer.phone.substring(0, 2));
+        params.append("senderPhone", customer.phone.substring(2, 11));
+      }
+      if (customer.tax_id) {
+        params.append("senderCPF", customer.tax_id.replace(/\D/g, ""));
+      }
+    }
 
-    // Estratégia: tentar /checkouts primeiro, depois /orders
-    const endpoints = [
-      {
-        name: "checkouts",
-        url: `${PAGBANK_BASE_URL}/checkouts`,
-        payload: {
-          reference_id: referenceId,
-          customer_modifiable: true,
-          amount: { value: totalAmount, currency: "BRL" },
-          payment_methods: [
-            { type: "CREDIT_CARD" },
-            { type: "DEBIT_CARD" },
-            { type: "BOLETO" },
-            { type: "PIX" },
-          ],
-          payment_methods_configs: [
-            {
-              type: "CREDIT_CARD",
-              config_options: [{ option: "INSTALLMENTS_LIMIT", value: "12" }],
-            },
-          ],
-          soft_descriptor: "STILLINF",
-          items: itemsPayload,
-          ...(customerPayload ? { customer: customerPayload } : {}),
-          redirect_url: "https://hug-hug-hugger.lovable.app/?payment=success",
-          return_url: "https://hug-hug-hugger.lovable.app/",
-          notification_urls: ["https://hug-hug-hugger.lovable.app/api/pagbank-webhook"],
-        },
+    // Endereço de entrega (opcional)
+    if (shipping) {
+      params.append("shippingType", "3"); // Não especificado
+      if (shipping.street) params.append("shippingAddressStreet", shipping.street);
+      if (shipping.number) params.append("shippingAddressNumber", shipping.number);
+      if (shipping.complement) params.append("shippingAddressComplement", shipping.complement);
+      if (shipping.locality) params.append("shippingAddressDistrict", shipping.locality);
+      if (shipping.city) params.append("shippingAddressCity", shipping.city);
+      if (shipping.region_code) params.append("shippingAddressState", shipping.region_code);
+      if (shipping.postal_code) params.append("shippingAddressPostalCode", shipping.postal_code.replace(/\D/g, ""));
+      params.append("shippingAddressCountry", "BRA");
+    }
+
+    console.log("Calling PagBank v2 checkout...");
+    console.log("URL:", `${PAGBANK_BASE_URL}/v2/checkout`);
+
+    const response = await fetch(`${PAGBANK_BASE_URL}/v2/checkout`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
       },
-      {
-        name: "orders",
-        url: `${PAGBANK_BASE_URL}/orders`,
-        payload: {
-          reference_id: referenceId,
-          ...(customerPayload ? { customer: customerPayload } : {}),
-          items: itemsPayload,
-          qr_codes: [
-            {
-              amount: { value: totalAmount },
-              expiration_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-            },
-          ],
-          shipping: shipping
-            ? {
-                address: {
-                  street: shipping.street || "",
-                  number: shipping.number || "S/N",
-                  complement: shipping.complement || "",
-                  locality: shipping.locality || "",
-                  city: shipping.city || "",
-                  region_code: shipping.region_code || "",
-                  country: "BRA",
-                  postal_code: (shipping.postal_code || "").replace(/\D/g, ""),
-                },
-              }
-            : undefined,
-          notification_urls: ["https://hug-hug-hugger.lovable.app/api/pagbank-webhook"],
-        },
-      },
-    ];
+      body: params.toString(),
+    });
 
-    let lastError = "";
-    for (const endpoint of endpoints) {
-      console.log(`Trying PagBank ${endpoint.name}...`);
-      console.log("Payload:", JSON.stringify(endpoint.payload).substring(0, 500));
+    const responseText = await response.text();
+    console.log("PagBank v2 response status:", response.status);
+    console.log("PagBank v2 response:", responseText.substring(0, 1000));
 
-      const response = await fetch(endpoint.url, {
-        method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify(endpoint.payload),
-      });
+    if (response.ok) {
+      // Resposta é XML, extrair código do checkout
+      const codeMatch = responseText.match(/<code>([^<]+)<\/code>/);
+      const dateMatch = responseText.match(/<date>([^<]+)<\/date>/);
 
-      const responseText = await response.text();
-      console.log(`${endpoint.name} response status:`, response.status);
-      console.log(`${endpoint.name} response:`, responseText.substring(0, 1000));
+      if (codeMatch) {
+        const checkoutCode = codeMatch[1];
+        // URL de pagamento do sandbox
+        const paymentUrl = `https://sandbox.pagseguro.uol.com.br/v2/checkout/payment.html?code=${checkoutCode}`;
 
-      if (response.ok) {
-        const data = JSON.parse(responseText);
-
-        // Extrair link de pagamento
-        let paymentUrl = "";
-        if (data.links) {
-          const payLink = data.links.find(
-            (l: { rel: string; href: string }) =>
-              l.rel === "PAY" || l.rel === "pay" || l.rel === "REDIRECT"
-          );
-          if (payLink) paymentUrl = payLink.href;
-        }
-
-        // Fallback: QR code link
-        if (!paymentUrl && data.qr_codes?.[0]?.links) {
-          const qrLink = data.qr_codes[0].links.find(
-            (l: { rel: string }) => l.rel === "PAY" || l.rel === "pay"
-          );
-          if (qrLink) paymentUrl = qrLink.href;
-        }
-
-        // Fallback: QR code text (para PIX)
-        const pixCode = data.qr_codes?.[0]?.text || null;
-
-        console.log("Payment URL found:", paymentUrl);
-        console.log("PIX code:", pixCode ? "present" : "none");
-        console.log("Response ID:", data.id);
+        console.log("Checkout code:", checkoutCode);
+        console.log("Payment URL:", paymentUrl);
 
         return new Response(
           JSON.stringify({
-            id: data.id,
+            id: checkoutCode,
             payment_url: paymentUrl,
-            pix_code: pixCode,
             reference_id: referenceId,
-            status: data.status,
-            endpoint_used: endpoint.name,
+            status: "CREATED",
+            endpoint_used: "v2/checkout",
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-
-      lastError = responseText;
-      console.log(
-        `${endpoint.name} failed (${response.status}), trying next...`
-      );
     }
 
-    // Todos os endpoints falharam
+    // Extrair erro do XML
+    const errorMatch = responseText.match(/<message>([^<]+)<\/message>/);
+    const errorCode = responseText.match(/<code>([^<]+)<\/code>/);
+
     return new Response(
       JSON.stringify({
-        error: "Nenhum endpoint do PagBank aceitou a requisição",
-        details: lastError,
-        help: "Sua conta PagBank pode precisar de liberação. Entre em contato com o suporte PagBank e solicite acesso à API de Checkout/Orders em produção.",
+        error: "Erro no checkout PagBank",
+        details: errorMatch ? errorMatch[1] : responseText.substring(0, 500),
+        error_code: errorCode ? errorCode[1] : null,
+        status_code: response.status,
       }),
-      { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      { status: response.status || 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("Checkout error:", error);
