@@ -127,6 +127,7 @@ const Admin = () => {
           <TabsList className="mb-6">
             <TabsTrigger value="address" className="gap-2"><MapPin className="h-4 w-4" />Endereço Remetente</TabsTrigger>
             <TabsTrigger value="products" className="gap-2"><Package className="h-4 w-4" />Produtos</TabsTrigger>
+            <TabsTrigger value="categories" className="gap-2"><Tag className="h-4 w-4" />Categorias</TabsTrigger>
             <TabsTrigger value="settings" className="gap-2"><Settings className="h-4 w-4" />Configurações</TabsTrigger>
           </TabsList>
 
