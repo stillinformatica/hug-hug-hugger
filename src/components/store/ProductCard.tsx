@@ -62,17 +62,30 @@ export const ProductCard = ({ product, index }: ProductCardProps) => {
           </h3>
           <p className="text-[11px] text-muted-foreground line-clamp-1">{product.description}</p>
           <div className="flex items-center justify-between pt-0.5">
-            <span className="text-sm font-bold text-primary">
-              R$ {Number(product.price).toFixed(2).replace(".", ",")}
-            </span>
-            <Button
-              size="sm"
-              onClick={handleAddToCart}
-              className="rounded-xl text-xs gap-1.5"
-            >
-              <ShoppingCart className="h-3 w-3" />
-              <span className="hidden lg:inline">Comprar</span>
-            </Button>
+            {isConsulte ? (
+              <Button
+                size="sm"
+                onClick={handleConsulte}
+                className="rounded-xl text-xs gap-1.5 w-full bg-green-600 hover:bg-green-700"
+              >
+                <MessageCircle className="h-3 w-3" />
+                CONSULTE
+              </Button>
+            ) : (
+              <>
+                <span className="text-sm font-bold text-primary">
+                  R$ {Number(product.price).toFixed(2).replace(".", ",")}
+                </span>
+                <Button
+                  size="sm"
+                  onClick={handleAddToCart}
+                  className="rounded-xl text-xs gap-1.5"
+                >
+                  <ShoppingCart className="h-3 w-3" />
+                  <span className="hidden lg:inline">Comprar</span>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </Link>
