@@ -5,7 +5,7 @@ import { useCartStore } from "@/stores/cartStore";
 import { StoreHeader } from "@/components/store/StoreHeader";
 import { StoreFooter } from "@/components/store/StoreFooter";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ShoppingCart, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ShoppingCart, Loader2, ChevronLeft, ChevronRight, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 
