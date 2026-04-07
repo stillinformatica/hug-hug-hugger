@@ -121,18 +121,30 @@ const ProductDetail = () => {
               <p className="text-muted-foreground mt-3">{product.description}</p>
             </div>
 
-            <div className="text-3xl font-bold text-primary">
-              R$ {Number(product.price).toFixed(2).replace(".", ",")}
-            </div>
-
-            <Button
-              onClick={handleAddToCart}
-              size="lg"
-              className="w-full rounded-xl text-base gap-2"
-            >
-              <ShoppingCart className="h-5 w-5" />
-              Adicionar ao Carrinho
-            </Button>
+            {isConsulte ? (
+              <Button
+                onClick={() => window.open(whatsappUrl, "_blank")}
+                size="lg"
+                className="w-full rounded-xl text-base gap-2 bg-green-600 hover:bg-green-700"
+              >
+                <MessageCircle className="h-5 w-5" />
+                CONSULTE
+              </Button>
+            ) : (
+              <>
+                <div className="text-3xl font-bold text-primary">
+                  R$ {Number(product.price).toFixed(2).replace(".", ",")}
+                </div>
+                <Button
+                  onClick={handleAddToCart}
+                  size="lg"
+                  className="w-full rounded-xl text-base gap-2"
+                >
+                  <ShoppingCart className="h-5 w-5" />
+                  Adicionar ao Carrinho
+                </Button>
+              </>
+            )}
           </motion.div>
         </div>
       </main>
