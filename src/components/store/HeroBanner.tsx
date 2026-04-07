@@ -6,7 +6,7 @@ export const HeroBanner = () => {
       <img
         src={bannerImg}
         alt="Still Informática - Next-Gen Gaming Power"
-        className="w-full h-auto object-cover rounded-2xl max-h-[320px]"
+        className="w-full max-h-[320px] object-contain rounded-2xl"
       />
     </section>
   );
