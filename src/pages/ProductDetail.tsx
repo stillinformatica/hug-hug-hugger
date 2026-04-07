@@ -72,8 +72,8 @@ const ProductDetail = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
           {/* Images */}
-          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="space-y-3">
-            <div className="aspect-square bg-secondary/50 rounded-2xl overflow-hidden relative">
+          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="space-y-3 max-w-md mx-auto">
+            <div className="aspect-square bg-secondary/50 rounded-2xl overflow-hidden relative max-h-[400px]">
               {images[currentImage]?.node ? (
                 <img
                   src={images[currentImage].node.url}
