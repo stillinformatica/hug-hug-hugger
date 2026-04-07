@@ -118,7 +118,7 @@ serve(async (req) => {
       if (codeMatch) {
         const checkoutCode = codeMatch[1];
         // URL de pagamento do sandbox
-        const paymentUrl = `https://sandbox.pagseguro.uol.com.br/v2/checkout/payment.html?code=${checkoutCode}`;
+        const paymentUrl = `https://sandbox.pagbank.com.br/v2/checkout/payment.html?code=${checkoutCode}`;
 
         console.log("Checkout code:", checkoutCode);
         console.log("Payment URL:", paymentUrl);
