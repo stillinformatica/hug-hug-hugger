@@ -44,7 +44,7 @@ const Checkout = () => {
   const [addressNumber, setAddressNumber] = useState("");
   const [addressComplement, setAddressComplement] = useState("");
 
-  const totalPrice = items.reduce((sum, item) => sum + parseFloat(item.price.amount) * item.quantity, 0);
+  const totalPrice = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
 
   const handleCepSearch = async () => {
     if (cep.replace(/\D/g, "").length !== 8) {
@@ -57,7 +57,7 @@ const Checkout = () => {
       const { data, error } = await supabase.functions.invoke("calculate-shipping", {
         body: {
           postal_code: cep,
-          items: items.map((i) => ({ name: i.product.node.title, quantity: i.quantity })),
+          items: items.map((i) => ({ name: i.name, quantity: i.quantity })),
         },
       });
 
@@ -90,10 +90,10 @@ const Checkout = () => {
       const { data, error } = await supabase.functions.invoke("pagbank-checkout", {
         body: {
           items: items.map((item) => ({
-            name: item.product.node.title,
+            name: item.name,
             quantity: item.quantity,
-            unit_amount: parseFloat(item.price.amount),
-            reference_id: item.variantId,
+            unit_amount: item.price,
+            reference_id: item.productId,
           })),
           customer: {
             name: customerName,
@@ -156,9 +156,7 @@ const Checkout = () => {
         <h1 className="text-2xl font-bold text-foreground mb-6">Finalizar Compra</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Forms */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Customer Info */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
               <Card>
                 <CardHeader>
@@ -186,7 +184,6 @@ const Checkout = () => {
               </Card>
             </motion.div>
 
-            {/* Shipping */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
               <Card>
                 <CardHeader>
@@ -197,13 +194,7 @@ const Checkout = () => {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex gap-2">
-                    <Input
-                      value={cep}
-                      onChange={(e) => setCep(e.target.value)}
-                      placeholder="Digite seu CEP"
-                      maxLength={9}
-                      className="max-w-[200px]"
-                    />
+                    <Input value={cep} onChange={(e) => setCep(e.target.value)} placeholder="Digite seu CEP" maxLength={9} className="max-w-[200px]" />
                     <Button onClick={handleCepSearch} disabled={isLoadingShipping} variant="outline">
                       {isLoadingShipping ? <Loader2 className="h-4 w-4 animate-spin" /> : "Buscar"}
                     </Button>
@@ -259,7 +250,6 @@ const Checkout = () => {
             </motion.div>
           </div>
 
-          {/* Right: Order Summary */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
             <Card className="sticky top-4">
               <CardHeader>
@@ -270,17 +260,17 @@ const Checkout = () => {
               </CardHeader>
               <CardContent className="space-y-4">
                 {items.map((item) => (
-                  <div key={item.variantId} className="flex gap-3">
+                  <div key={item.productId} className="flex gap-3">
                     <div className="w-12 h-12 bg-secondary rounded-lg overflow-hidden flex-shrink-0">
-                      {item.product.node.images?.edges?.[0]?.node && (
-                        <img src={item.product.node.images.edges[0].node.url} alt={item.product.node.title} className="w-full h-full object-cover" />
+                      {item.image && (
+                        <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{item.product.node.title}</p>
+                      <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
                       <p className="text-xs text-muted-foreground">Qtd: {item.quantity}</p>
                     </div>
-                    <p className="text-sm font-bold text-foreground">R$ {(parseFloat(item.price.amount) * item.quantity).toFixed(2)}</p>
+                    <p className="text-sm font-bold text-foreground">R$ {(item.price * item.quantity).toFixed(2).replace(".", ",")}</p>
                   </div>
                 ))}
 
@@ -289,7 +279,7 @@ const Checkout = () => {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Subtotal</span>
-                    <span className="text-foreground">R$ {totalPrice.toFixed(2)}</span>
+                    <span className="text-foreground">R$ {totalPrice.toFixed(2).replace(".", ",")}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Frete</span>
@@ -301,7 +291,7 @@ const Checkout = () => {
 
                 <div className="flex justify-between items-center">
                   <span className="text-lg font-semibold text-foreground">Total</span>
-                  <span className="text-xl font-bold text-primary">R$ {totalPrice.toFixed(2)}</span>
+                  <span className="text-xl font-bold text-primary">R$ {totalPrice.toFixed(2).replace(".", ",")}</span>
                 </div>
 
                 <Button
