@@ -57,13 +57,13 @@ export const ProductCard = ({ product, index }: ProductCardProps) => {
             </div>
           )}
         </div>
-        <div className="p-4 space-y-2">
-          <h3 className="font-semibold text-foreground text-sm line-clamp-2 group-hover:text-primary transition-colors">
+        <div className="p-3 space-y-1.5">
+          <h3 className="font-semibold text-foreground text-xs line-clamp-2 group-hover:text-primary transition-colors">
             {node.title}
           </h3>
-          <p className="text-xs text-muted-foreground line-clamp-2">{node.description}</p>
-          <div className="flex items-center justify-between pt-1">
-            <span className="text-lg font-bold text-primary">
+          <p className="text-[11px] text-muted-foreground line-clamp-1">{node.description}</p>
+          <div className="flex items-center justify-between pt-0.5">
+            <span className="text-sm font-bold text-primary">
               R$ {parseFloat(price.amount).toFixed(2)}
             </span>
             <Button
