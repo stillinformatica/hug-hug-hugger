@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCartStore } from "@/stores/cartStore";
 import type { Product } from "@/hooks/useProducts";
@@ -14,6 +14,16 @@ interface ProductCardProps {
 export const ProductCard = ({ product, index }: ProductCardProps) => {
   const addItem = useCartStore(state => state.addItem);
   const image = product.images?.[0];
+  const isConsulte = Number(product.price) === 0;
+
+  const productUrl = `${window.location.origin}/produto/${product.id}`;
+  const whatsappUrl = `https://wa.me/5511982596096?text=${encodeURIComponent(`Olá! Gostaria de saber o preço deste produto: ${product.name}\n${productUrl}`)}`;
+
+  const handleConsulte = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    window.open(whatsappUrl, "_blank");
+  };
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -52,17 +62,30 @@ export const ProductCard = ({ product, index }: ProductCardProps) => {
           </h3>
           <p className="text-[11px] text-muted-foreground line-clamp-1">{product.description}</p>
           <div className="flex items-center justify-between pt-0.5">
-            <span className="text-sm font-bold text-primary">
-              R$ {Number(product.price).toFixed(2).replace(".", ",")}
-            </span>
-            <Button
-              size="sm"
-              onClick={handleAddToCart}
-              className="rounded-xl text-xs gap-1.5"
-            >
-              <ShoppingCart className="h-3 w-3" />
-              <span className="hidden lg:inline">Comprar</span>
-            </Button>
+            {isConsulte ? (
+              <Button
+                size="sm"
+                onClick={handleConsulte}
+                className="rounded-xl text-xs gap-1.5 w-full bg-green-600 hover:bg-green-700"
+              >
+                <MessageCircle className="h-3 w-3" />
+                CONSULTE
+              </Button>
+            ) : (
+              <>
+                <span className="text-sm font-bold text-primary">
+                  R$ {Number(product.price).toFixed(2).replace(".", ",")}
+                </span>
+                <Button
+                  size="sm"
+                  onClick={handleAddToCart}
+                  className="rounded-xl text-xs gap-1.5"
+                >
+                  <ShoppingCart className="h-3 w-3" />
+                  <span className="hidden lg:inline">Comprar</span>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </Link>
