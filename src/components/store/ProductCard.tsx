@@ -1,36 +1,25 @@
 import { Link } from "react-router-dom";
-import { ShoppingCart, Loader2 } from "lucide-react";
+import { ShoppingCart } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useCartStore, type ShopifyProduct } from "@/stores/cartStore";
+import { useCartStore } from "@/stores/cartStore";
+import type { Product } from "@/hooks/useProducts";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 
 interface ProductCardProps {
-  product: ShopifyProduct;
+  product: Product;
   index: number;
 }
 
 export const ProductCard = ({ product, index }: ProductCardProps) => {
   const addItem = useCartStore(state => state.addItem);
-  const isLoading = useCartStore(state => state.isLoading);
-  const { node } = product;
-  const image = node.images.edges[0]?.node;
-  const price = node.priceRange.minVariantPrice;
-  const variant = node.variants.edges[0]?.node;
+  const image = product.images?.[0];
 
-  const handleAddToCart = async (e: React.MouseEvent) => {
+  const handleAddToCart = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!variant) return;
-    await addItem({
-      product,
-      variantId: variant.id,
-      variantTitle: variant.title,
-      price: variant.price,
-      quantity: 1,
-      selectedOptions: variant.selectedOptions || [],
-    });
-    toast.success("Adicionado ao carrinho!", { description: node.title });
+    addItem(product);
+    toast.success("Adicionado ao carrinho!", { description: product.name });
   };
 
   return (
@@ -40,14 +29,14 @@ export const ProductCard = ({ product, index }: ProductCardProps) => {
       transition={{ delay: index * 0.05 }}
     >
       <Link
-        to={`/produto/${node.handle}`}
+        to={`/produto/${product.id}`}
         className="group block bg-card rounded-2xl border border-border overflow-hidden hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-all duration-300"
       >
         <div className="aspect-square bg-secondary/50 overflow-hidden relative">
           {image ? (
             <img
-              src={image.url}
-              alt={image.altText || node.title}
+              src={image}
+              alt={product.name}
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               loading="lazy"
             />
@@ -59,20 +48,19 @@ export const ProductCard = ({ product, index }: ProductCardProps) => {
         </div>
         <div className="p-3 space-y-1.5">
           <h3 className="font-semibold text-foreground text-xs line-clamp-2 group-hover:text-primary transition-colors">
-            {node.title}
+            {product.name}
           </h3>
-          <p className="text-[11px] text-muted-foreground line-clamp-1">{node.description}</p>
+          <p className="text-[11px] text-muted-foreground line-clamp-1">{product.description}</p>
           <div className="flex items-center justify-between pt-0.5">
             <span className="text-sm font-bold text-primary">
-              R$ {parseFloat(price.amount).toFixed(2)}
+              R$ {Number(product.price).toFixed(2).replace(".", ",")}
             </span>
             <Button
               size="sm"
               onClick={handleAddToCart}
-              disabled={isLoading || !variant?.availableForSale}
               className="rounded-xl text-xs gap-1.5"
             >
-              {isLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : <ShoppingCart className="h-3 w-3" />}
+              <ShoppingCart className="h-3 w-3" />
               <span className="hidden lg:inline">Comprar</span>
             </Button>
           </div>

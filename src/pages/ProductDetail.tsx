@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { useProductByHandle } from "@/hooks/useProducts";
+import { useProductById } from "@/hooks/useProducts";
 import { useCartStore } from "@/stores/cartStore";
 import { StoreHeader } from "@/components/store/StoreHeader";
 import { StoreFooter } from "@/components/store/StoreFooter";
@@ -11,10 +11,8 @@ import { motion } from "framer-motion";
 
 const ProductDetail = () => {
   const { handle } = useParams<{ handle: string }>();
-  const { data: product, isLoading } = useProductByHandle(handle || "");
+  const { data: product, isLoading } = useProductById(handle || "");
   const addItem = useCartStore(state => state.addItem);
-  const cartLoading = useCartStore(state => state.isLoading);
-  const [selectedVariantIndex, setSelectedVariantIndex] = useState(0);
   const [currentImage, setCurrentImage] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -43,22 +41,11 @@ const ProductDetail = () => {
     );
   }
 
-  const { node } = product;
-  const images = node.images.edges;
-  const variants = node.variants.edges;
-  const selectedVariant = variants[selectedVariantIndex]?.node;
+  const images = product.images || [];
 
-  const handleAddToCart = async () => {
-    if (!selectedVariant) return;
-    await addItem({
-      product,
-      variantId: selectedVariant.id,
-      variantTitle: selectedVariant.title,
-      price: selectedVariant.price,
-      quantity: 1,
-      selectedOptions: selectedVariant.selectedOptions || [],
-    });
-    toast.success("Adicionado ao carrinho!", { description: node.title });
+  const handleAddToCart = () => {
+    addItem(product);
+    toast.success("Adicionado ao carrinho!", { description: product.name });
   };
 
   return (
@@ -74,10 +61,10 @@ const ProductDetail = () => {
           {/* Images */}
           <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="space-y-3 max-w-md mx-auto">
             <div className="aspect-square bg-secondary/50 rounded-2xl overflow-hidden relative max-h-[400px]">
-              {images[currentImage]?.node ? (
+              {images[currentImage] ? (
                 <img
-                  src={images[currentImage].node.url}
-                  alt={images[currentImage].node.altText || node.title}
+                  src={images[currentImage]}
+                  alt={product.name}
                   className="w-full h-full object-cover"
                 />
               ) : (
@@ -112,7 +99,7 @@ const ProductDetail = () => {
                       i === currentImage ? "border-primary" : "border-border"
                     }`}
                   >
-                    <img src={img.node.url} alt="" className="w-full h-full object-cover" />
+                    <img src={img} alt="" className="w-full h-full object-cover" />
                   </button>
                 ))}
               </div>
@@ -122,61 +109,27 @@ const ProductDetail = () => {
           {/* Info */}
           <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-foreground">{node.title}</h1>
-              <p className="text-muted-foreground mt-2">{node.description}</p>
+              <h1 className="text-2xl md:text-3xl font-bold text-foreground">{product.name}</h1>
+              {product.category && (
+                <span className="inline-block mt-2 px-3 py-1 text-xs font-medium bg-secondary text-secondary-foreground rounded-full">
+                  {product.category}
+                </span>
+              )}
+              <p className="text-muted-foreground mt-3">{product.description}</p>
             </div>
 
             <div className="text-3xl font-bold text-primary">
-              R$ {selectedVariant ? parseFloat(selectedVariant.price.amount).toFixed(2) : parseFloat(node.priceRange.minVariantPrice.amount).toFixed(2)}
+              R$ {Number(product.price).toFixed(2).replace(".", ",")}
             </div>
-
-            {/* Variant selection */}
-            {node.options.map((option) => (
-              <div key={option.name} className="space-y-2">
-                <label className="text-sm font-semibold text-foreground">{option.name}</label>
-                <div className="flex flex-wrap gap-2">
-                  {option.values.map((value) => {
-                    const variantIdx = variants.findIndex(v =>
-                      v.node.selectedOptions.some(o => o.name === option.name && o.value === value)
-                    );
-                    const isSelected = selectedVariantIndex === variantIdx;
-                    return (
-                      <button
-                        key={value}
-                        onClick={() => variantIdx >= 0 && setSelectedVariantIndex(variantIdx)}
-                        className={`px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${
-                          isSelected
-                            ? "bg-primary text-primary-foreground border-primary"
-                            : "bg-secondary text-foreground border-border hover:border-primary/50"
-                        }`}
-                      >
-                        {value}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
 
             <Button
               onClick={handleAddToCart}
-              disabled={cartLoading || !selectedVariant?.availableForSale}
               size="lg"
               className="w-full rounded-xl text-base gap-2"
             >
-              {cartLoading ? (
-                <Loader2 className="h-5 w-5 animate-spin" />
-              ) : (
-                <>
-                  <ShoppingCart className="h-5 w-5" />
-                  Adicionar ao Carrinho
-                </>
-              )}
+              <ShoppingCart className="h-5 w-5" />
+              Adicionar ao Carrinho
             </Button>
-
-            {selectedVariant && !selectedVariant.availableForSale && (
-              <p className="text-sm text-destructive font-medium text-center">Produto indisponível</p>
-            )}
           </motion.div>
         </div>
       </main>

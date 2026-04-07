@@ -1,28 +1,48 @@
 import { useQuery } from '@tanstack/react-query';
-import { storefrontApiRequest, STOREFRONT_PRODUCTS_QUERY, PRODUCT_BY_HANDLE_QUERY, ShopifyProduct } from '@/lib/shopify';
+import { supabase } from '@/integrations/supabase/client';
+
+export interface Product {
+  id: string;
+  name: string;
+  description: string | null;
+  category: string | null;
+  price: number;
+  images: string[];
+  created_at: string;
+}
 
 export function useProducts(searchQuery?: string) {
   return useQuery({
-    queryKey: ['shopify-products', searchQuery],
+    queryKey: ['products', searchQuery],
     queryFn: async () => {
-      const data = await storefrontApiRequest(STOREFRONT_PRODUCTS_QUERY, {
-        first: 50,
-        query: searchQuery || null,
-      });
-      return (data?.data?.products?.edges || []) as ShopifyProduct[];
+      let query = supabase
+        .from('announced_products')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (searchQuery) {
+        query = query.or(`name.ilike.%${searchQuery}%,category.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []) as unknown as Product[];
     },
   });
 }
 
-export function useProductByHandle(handle: string) {
+export function useProductById(id: string) {
   return useQuery({
-    queryKey: ['shopify-product', handle],
+    queryKey: ['product', id],
     queryFn: async () => {
-      const data = await storefrontApiRequest(PRODUCT_BY_HANDLE_QUERY, { handle });
-      const product = data?.data?.product;
-      if (!product) return null;
-      return { node: product } as ShopifyProduct;
+      const { data, error } = await supabase
+        .from('announced_products')
+        .select('*')
+        .eq('id', id)
+        .single();
+      if (error) throw error;
+      return data as unknown as Product;
     },
-    enabled: !!handle,
+    enabled: !!id,
   });
 }
