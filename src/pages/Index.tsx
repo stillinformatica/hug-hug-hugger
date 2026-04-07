@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { StoreHeader } from "@/components/store/StoreHeader";
 import { HeroBanner } from "@/components/store/HeroBanner";
@@ -11,6 +11,10 @@ const Index = () => {
   const [searchParams] = useSearchParams();
   const qParam = searchParams.get("q") || "";
   const [searchQuery, setSearchQuery] = useState(qParam);
+
+  useEffect(() => {
+    setSearchQuery(qParam);
+  }, [qParam]);
 
   const { data: products, isLoading } = useProducts(searchQuery || undefined);
 
