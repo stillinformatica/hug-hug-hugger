@@ -5,7 +5,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
@@ -30,7 +29,6 @@ const emptyAddress: SenderAddress = {
   name: "", street: "", number: "", complement: "",
   neighborhood: "", city: "", state: "", zip: "", phone: "",
 };
-
 
 const Admin = () => {
   const navigate = useNavigate();
@@ -121,13 +119,21 @@ const Admin = () => {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-8">
-        <Tabs defaultValue="address">
+        <Tabs defaultValue="products">
           <TabsList className="mb-6">
-            <TabsTrigger value="address" className="gap-2"><MapPin className="h-4 w-4" />Endereço Remetente</TabsTrigger>
             <TabsTrigger value="products" className="gap-2"><Package className="h-4 w-4" />Produtos</TabsTrigger>
             <TabsTrigger value="categories" className="gap-2"><Tag className="h-4 w-4" />Categorias</TabsTrigger>
+            <TabsTrigger value="address" className="gap-2"><MapPin className="h-4 w-4" />Endereço Remetente</TabsTrigger>
             <TabsTrigger value="settings" className="gap-2"><Settings className="h-4 w-4" />Configurações</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="products">
+            <ProductsManager />
+          </TabsContent>
+
+          <TabsContent value="categories">
+            <CategoriesManager />
+          </TabsContent>
 
           <TabsContent value="address">
             <Card>
@@ -182,14 +188,7 @@ const Admin = () => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="products">
-            <ProductsManager />
-          </TabsContent>
-
-          <TabsContent value="categories">
-            <CategoriesManager />
-          </TabsContent>
-
+          <TabsContent value="settings">
             <Card>
               <CardHeader>
                 <CardTitle>Configurações Gerais</CardTitle>
