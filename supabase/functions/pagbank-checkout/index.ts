@@ -6,7 +6,7 @@ const corsHeaders = {
 };
 
 // PagBank API moderna - tenta múltiplos endpoints
-const PAGBANK_BASE_URL = "https://api.pagseguro.com";
+const PAGBANK_BASE_URL = "https://sandbox.api.pagseguro.com";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
