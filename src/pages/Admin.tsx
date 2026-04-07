@@ -5,10 +5,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft, Save, MapPin, Package, Settings } from "lucide-react";
+import { Loader2, ArrowLeft, Save, MapPin, Package, Settings, Plus, Trash2, ImageIcon } from "lucide-react";
+import logo from "@/assets/logo.png";
+import type { Product } from "@/hooks/useProducts";
 import logo from "@/assets/logo.png";
 
 interface SenderAddress {
@@ -178,17 +181,7 @@ const Admin = () => {
           </TabsContent>
 
           <TabsContent value="products">
-            <Card>
-              <CardHeader>
-                <CardTitle>Gerenciar Produtos</CardTitle>
-                <CardDescription>Os produtos são gerenciados pela integração com Shopify</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-muted-foreground">
-                  Para adicionar, editar ou remover produtos, utilize o chat do Lovable ou o painel da Shopify.
-                </p>
-              </CardContent>
-            </Card>
+            <ProductsManager />
           </TabsContent>
 
           <TabsContent value="settings">
