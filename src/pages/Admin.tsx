@@ -188,7 +188,10 @@ const Admin = () => {
             <ProductsManager />
           </TabsContent>
 
-          <TabsContent value="settings">
+          <TabsContent value="categories">
+            <CategoriesManager />
+          </TabsContent>
+
             <Card>
               <CardHeader>
                 <CardTitle>Configurações Gerais</CardTitle>
