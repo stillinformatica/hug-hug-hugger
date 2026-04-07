@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const PAGBANK_BASE_URL = "https://ws.sandbox.pagbank.com.br";
+const PAGBANK_BASE_URL = "https://sandbox.api.pagseguro.com";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -14,11 +14,10 @@ serve(async (req) => {
 
   try {
     const PAGBANK_TOKEN = Deno.env.get("PAGBANK_TOKEN");
-    const PAGBANK_EMAIL = Deno.env.get("PAGBANK_EMAIL");
 
-    if (!PAGBANK_TOKEN || !PAGBANK_EMAIL) {
+    if (!PAGBANK_TOKEN) {
       return new Response(
-        JSON.stringify({ error: "PAGBANK_TOKEN ou PAGBANK_EMAIL não configurado" }),
+        JSON.stringify({ error: "PAGBANK_TOKEN não configurado" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -35,116 +34,155 @@ serve(async (req) => {
 
     const referenceId = `ORDER_${Date.now()}`;
 
-    // Construir XML para API v2 do PagSeguro
-    const totalAmount = items.reduce(
-      (sum: number, item: { unit_amount: number; quantity: number }) =>
-        sum + item.unit_amount * item.quantity,
+    // Build order payload for PagBank API v4
+    const orderItems = items.map((item: { name: string; quantity: number; unit_amount: number }, index: number) => ({
+      reference_id: `item_${index + 1}`,
+      name: item.name.substring(0, 64),
+      quantity: item.quantity,
+      unit_amount: Math.round(item.unit_amount * 100), // API v4 uses cents
+    }));
+
+    const totalAmount = orderItems.reduce(
+      (sum: number, item: { unit_amount: number; quantity: number }) => sum + item.unit_amount * item.quantity,
       0
-    ).toFixed(2);
+    );
 
-    // Construir itens no formato de query string (API v2 usa application/x-www-form-urlencoded)
-    const params = new URLSearchParams();
-    params.append("email", PAGBANK_EMAIL);
-    params.append("token", PAGBANK_TOKEN);
-    params.append("currency", "BRL");
-    params.append("reference", referenceId);
-    params.append("redirectURL", "https://hug-hug-hugger.lovable.app/?payment=success");
-    params.append("notificationURL", "https://hug-hug-hugger.lovable.app/api/pagbank-webhook");
+    const orderPayload: Record<string, unknown> = {
+      reference_id: referenceId,
+      items: orderItems,
+      notification_urls: [
+        "https://hug-hug-hugger.lovable.app/api/pagbank-webhook"
+      ],
+    };
 
-    // Adicionar itens
-    items.forEach((item: { name: string; quantity: number; unit_amount: number }, index: number) => {
-      const i = index + 1;
-      params.append(`itemId${i}`, String(i));
-      params.append(`itemDescription${i}`, item.name.substring(0, 100));
-      params.append(`itemAmount${i}`, item.unit_amount.toFixed(2));
-      params.append(`itemQuantity${i}`, String(item.quantity));
-    });
-
-    // Dados do comprador (opcional)
+    // Add customer if provided
     if (customer) {
-      if (customer.name) params.append("senderName", customer.name.substring(0, 50));
-      if (customer.email) {
-        // No sandbox, o email precisa ter @sandbox.pagseguro.com.br
-        const senderEmail = customer.email.includes("@sandbox.pagseguro.com.br")
-          ? customer.email
-          : `${customer.email.split("@")[0]}@sandbox.pagseguro.com.br`;
-        params.append("senderEmail", senderEmail);
+      const customerData: Record<string, unknown> = {};
+      if (customer.name) customerData.name = customer.name.substring(0, 50);
+      if (customer.email) customerData.email = customer.email;
+      if (customer.tax_id) {
+        customerData.tax_id = customer.tax_id.replace(/\D/g, "");
       }
       if (customer.phone) {
-        params.append("senderAreaCode", customer.phone.substring(0, 2));
-        params.append("senderPhone", customer.phone.substring(2, 11));
+        const cleanPhone = customer.phone.replace(/\D/g, "");
+        customerData.phones = [{
+          country: 55,
+          area: parseInt(cleanPhone.substring(0, 2)),
+          number: parseInt(cleanPhone.substring(2)),
+          type: "MOBILE",
+        }];
       }
-      if (customer.tax_id) {
-        params.append("senderCPF", customer.tax_id.replace(/\D/g, ""));
-      }
+      orderPayload.customer = customerData;
     }
 
-    // Endereço de entrega (opcional)
+    // Add shipping if provided
     if (shipping) {
-      params.append("shippingType", "3"); // Não especificado
-      if (shipping.street) params.append("shippingAddressStreet", shipping.street);
-      if (shipping.number) params.append("shippingAddressNumber", shipping.number);
-      if (shipping.complement) params.append("shippingAddressComplement", shipping.complement);
-      if (shipping.locality) params.append("shippingAddressDistrict", shipping.locality);
-      if (shipping.city) params.append("shippingAddressCity", shipping.city);
-      if (shipping.region_code) params.append("shippingAddressState", shipping.region_code);
-      if (shipping.postal_code) params.append("shippingAddressPostalCode", shipping.postal_code.replace(/\D/g, ""));
-      params.append("shippingAddressCountry", "BRA");
+      orderPayload.shipping = {
+        address: {
+          street: shipping.street || "",
+          number: shipping.number || "S/N",
+          complement: shipping.complement || "",
+          locality: shipping.locality || "",
+          city: shipping.city || "",
+          region_code: shipping.region_code || "",
+          country: "BRA",
+          postal_code: shipping.postal_code?.replace(/\D/g, "") || "",
+        },
+      };
     }
 
-    console.log("Calling PagBank v2 checkout...");
-    console.log("URL:", `${PAGBANK_BASE_URL}/v2/checkout`);
-    console.log("Email:", PAGBANK_EMAIL);
-    console.log("Token length:", PAGBANK_TOKEN?.length, "Token prefix:", PAGBANK_TOKEN?.substring(0, 6));
-    console.log("Body params:", params.toString().substring(0, 300));
+    // Add checkout redirect URLs
+    orderPayload.charges = [{
+      reference_id: referenceId,
+      description: `Pedido ${referenceId}`,
+      amount: {
+        value: totalAmount,
+        currency: "BRL",
+      },
+      payment_method: {
+        type: "CHECKOUT",
+        checkout: {
+          redirect_urls: {
+            return_url: "https://hug-hug-hugger.lovable.app/?payment=success",
+          },
+        },
+      },
+    }];
 
-    const response = await fetch(`${PAGBANK_BASE_URL}/v2/checkout`, {
+    console.log("Calling PagBank API v4 /checkouts...");
+    console.log("Token length:", PAGBANK_TOKEN?.length, "Token prefix:", PAGBANK_TOKEN?.substring(0, 6));
+
+    // Try /checkouts endpoint first (simplified checkout)
+    const checkoutPayload = {
+      reference_id: referenceId,
+      expiration_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, '-03:00'),
+      customer_modifiable: true,
+      items: orderItems,
+      additional_amount: 0,
+      discount_amount: 0,
+      payment_methods: [
+        { type: "CREDIT_CARD" },
+        { type: "DEBIT_CARD" },
+        { type: "BOLETO" },
+        { type: "PIX" },
+      ],
+      payment_methods_configs: [{
+        type: "CREDIT_CARD",
+        config_options: [{
+          option: "INSTALLMENTS_LIMIT",
+          value: "12",
+        }],
+      }],
+      redirect_urls: {
+        return_url: "https://hug-hug-hugger.lovable.app/?payment=success",
+        back_url: "https://hug-hug-hugger.lovable.app/?payment=cancelled",
+      },
+      notification_urls: [
+        "https://hug-hug-hugger.lovable.app/api/pagbank-webhook"
+      ],
+      payment_notification_urls: [
+        "https://hug-hug-hugger.lovable.app/api/pagbank-webhook"
+      ],
+    };
+
+    console.log("Checkout payload:", JSON.stringify(checkoutPayload).substring(0, 500));
+
+    const response = await fetch(`${PAGBANK_BASE_URL}/checkouts`, {
       method: "POST",
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${PAGBANK_TOKEN}`,
+        "x-api-version": "4.0",
       },
-      body: params.toString(),
+      body: JSON.stringify(checkoutPayload),
     });
 
     const responseText = await response.text();
-    console.log("PagBank v2 response status:", response.status);
-    console.log("PagBank v2 response:", responseText.substring(0, 1000));
+    console.log("PagBank response status:", response.status);
+    console.log("PagBank response:", responseText.substring(0, 1000));
 
     if (response.ok) {
-      // Resposta é XML, extrair código do checkout
-      const codeMatch = responseText.match(/<code>([^<]+)<\/code>/);
-      const dateMatch = responseText.match(/<date>([^<]+)<\/date>/);
+      const data = JSON.parse(responseText);
+      
+      // The checkout response contains links with the payment URL
+      const paymentLink = data.links?.find((l: { rel: string }) => l.rel === "PAY");
+      const paymentUrl = paymentLink?.href || `https://sandbox.pagseguro.uol.com.br/v2/checkout/payment.html?code=${data.id}`;
 
-      if (codeMatch) {
-        const checkoutCode = codeMatch[1];
-        // URL de pagamento do sandbox
-        const paymentUrl = `https://sandbox.pagbank.com.br/v2/checkout/payment.html?code=${checkoutCode}`;
-
-        console.log("Checkout code:", checkoutCode);
-        console.log("Payment URL:", paymentUrl);
-
-        return new Response(
-          JSON.stringify({
-            id: checkoutCode,
-            payment_url: paymentUrl,
-            reference_id: referenceId,
-            status: "CREATED",
-            endpoint_used: "v2/checkout",
-          }),
-          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
+      return new Response(
+        JSON.stringify({
+          id: data.id,
+          payment_url: paymentUrl,
+          reference_id: referenceId,
+          status: "CREATED",
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
-
-    // Extrair erro do XML
-    const errorMatch = responseText.match(/<message>([^<]+)<\/message>/);
-    const errorCode = responseText.match(/<code>([^<]+)<\/code>/);
 
     return new Response(
       JSON.stringify({
         error: "Erro no checkout PagBank",
-        details: errorMatch ? errorMatch[1] : responseText.substring(0, 500),
-        error_code: errorCode ? errorCode[1] : null,
+        details: responseText.substring(0, 500),
         status_code: response.status,
       }),
       { status: response.status || 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
