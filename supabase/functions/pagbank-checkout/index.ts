@@ -5,7 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const PAGBANK_BASE_URL = "https://ws.sandbox.pagseguro.uol.com.br";
+const PAGBANK_BASE_URL = "https://ws.sandbox.pagbank.com.br";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -118,7 +118,7 @@ serve(async (req) => {
       if (codeMatch) {
         const checkoutCode = codeMatch[1];
         // URL de pagamento do sandbox
-        const paymentUrl = `https://sandbox.pagseguro.uol.com.br/v2/checkout/payment.html?code=${checkoutCode}`;
+        const paymentUrl = `https://sandbox.pagbank.com.br/v2/checkout/payment.html?code=${checkoutCode}`;
 
         console.log("Checkout code:", checkoutCode);
         console.log("Payment URL:", paymentUrl);
