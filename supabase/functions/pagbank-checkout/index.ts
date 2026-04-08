@@ -51,7 +51,7 @@ serve(async (req) => {
       reference_id: referenceId,
       items: orderItems,
       notification_urls: [
-        "https://hug-hug-hugger.lovable.app/api/pagbank-webhook"
+      "https://www.stillinformatica.com.br/api/pagbank-webhook"
       ],
     };
 
@@ -103,7 +103,7 @@ serve(async (req) => {
         type: "CHECKOUT",
         checkout: {
           redirect_urls: {
-            return_url: "https://hug-hug-hugger.lovable.app/?payment=success",
+            return_url: "https://www.stillinformatica.com.br/?payment=success",
           },
         },
       },
@@ -134,14 +134,14 @@ serve(async (req) => {
         }],
       }],
       redirect_urls: {
-        return_url: "https://hug-hug-hugger.lovable.app/?payment=success",
-        back_url: "https://hug-hug-hugger.lovable.app/?payment=cancelled",
+        return_url: "https://www.stillinformatica.com.br/?payment=success",
+        back_url: "https://www.stillinformatica.com.br/?payment=cancelled",
       },
       notification_urls: [
-        "https://hug-hug-hugger.lovable.app/api/pagbank-webhook"
+        "https://www.stillinformatica.com.br/api/pagbank-webhook"
       ],
       payment_notification_urls: [
-        "https://hug-hug-hugger.lovable.app/api/pagbank-webhook"
+        "https://www.stillinformatica.com.br/api/pagbank-webhook"
       ],
     };
 
