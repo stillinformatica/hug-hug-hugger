@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,6 +15,8 @@ serve(async (req) => {
 
   try {
     const PAGBANK_TOKEN = Deno.env.get("PAGBANK_TOKEN");
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
     if (!PAGBANK_TOKEN) {
       return new Response(
@@ -34,12 +37,11 @@ serve(async (req) => {
 
     const referenceId = `ORDER_${Date.now()}`;
 
-    // Build order payload for PagBank API v4
     const orderItems = items.map((item: { name: string; quantity: number; unit_amount: number }, index: number) => ({
       reference_id: `item_${index + 1}`,
       name: item.name.substring(0, 64),
       quantity: item.quantity,
-      unit_amount: Math.round(item.unit_amount * 100), // API v4 uses cents
+      unit_amount: Math.round(item.unit_amount * 100),
     }));
 
     const totalAmount = orderItems.reduce(
@@ -47,72 +49,9 @@ serve(async (req) => {
       0
     );
 
-    const orderPayload: Record<string, unknown> = {
-      reference_id: referenceId,
-      items: orderItems,
-      notification_urls: [
-      "https://www.stillinformatica.com.br/api/pagbank-webhook"
-      ],
-    };
+    // Webhook URL via edge function
+    const webhookUrl = `${SUPABASE_URL}/functions/v1/pagbank-webhook`;
 
-    // Add customer if provided
-    if (customer) {
-      const customerData: Record<string, unknown> = {};
-      if (customer.name) customerData.name = customer.name.substring(0, 50);
-      if (customer.email) customerData.email = customer.email;
-      if (customer.tax_id) {
-        customerData.tax_id = customer.tax_id.replace(/\D/g, "");
-      }
-      if (customer.phone) {
-        const cleanPhone = customer.phone.replace(/\D/g, "");
-        customerData.phones = [{
-          country: 55,
-          area: parseInt(cleanPhone.substring(0, 2)),
-          number: parseInt(cleanPhone.substring(2)),
-          type: "MOBILE",
-        }];
-      }
-      orderPayload.customer = customerData;
-    }
-
-    // Add shipping if provided
-    if (shipping) {
-      orderPayload.shipping = {
-        address: {
-          street: shipping.street || "",
-          number: shipping.number || "S/N",
-          complement: shipping.complement || "",
-          locality: shipping.locality || "",
-          city: shipping.city || "",
-          region_code: shipping.region_code || "",
-          country: "BRA",
-          postal_code: shipping.postal_code?.replace(/\D/g, "") || "",
-        },
-      };
-    }
-
-    // Add checkout redirect URLs
-    orderPayload.charges = [{
-      reference_id: referenceId,
-      description: `Pedido ${referenceId}`,
-      amount: {
-        value: totalAmount,
-        currency: "BRL",
-      },
-      payment_method: {
-        type: "CHECKOUT",
-        checkout: {
-          redirect_urls: {
-            return_url: "https://www.stillinformatica.com.br/?payment=success",
-          },
-        },
-      },
-    }];
-
-    console.log("Calling PagBank API v4 /checkouts...");
-    console.log("Token length:", PAGBANK_TOKEN?.length, "Token prefix:", PAGBANK_TOKEN?.substring(0, 6));
-
-    // Try /checkouts endpoint first (simplified checkout)
     const checkoutPayload = {
       reference_id: referenceId,
       expiration_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, '-03:00'),
@@ -137,15 +76,12 @@ serve(async (req) => {
         return_url: "https://www.stillinformatica.com.br/?payment=success",
         back_url: "https://www.stillinformatica.com.br/?payment=cancelled",
       },
-      notification_urls: [
-        "https://www.stillinformatica.com.br/api/pagbank-webhook"
-      ],
-      payment_notification_urls: [
-        "https://www.stillinformatica.com.br/api/pagbank-webhook"
-      ],
+      notification_urls: [webhookUrl],
+      payment_notification_urls: [webhookUrl],
     };
 
-    console.log("Checkout payload:", JSON.stringify(checkoutPayload).substring(0, 500));
+    console.log("Calling PagBank API v4 /checkouts...");
+    console.log("Webhook URL:", webhookUrl);
 
     const response = await fetch(`${PAGBANK_BASE_URL}/checkouts`, {
       method: "POST",
@@ -164,9 +100,25 @@ serve(async (req) => {
     if (response.ok) {
       const data = JSON.parse(responseText);
       
-      // The checkout response contains links with the payment URL
       const paymentLink = data.links?.find((l: { rel: string }) => l.rel === "PAY");
-      const paymentUrl = paymentLink?.href || `https://sandbox.pagseguro.uol.com.br/v2/checkout/payment.html?code=${data.id}`;
+      const paymentUrl = paymentLink?.href || `https://pagamento.sandbox.pagbank.com.br/pagamento?code=${data.id}`;
+
+      // Save order to database
+      if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+        const { error: dbError } = await supabase.from("orders").insert({
+          reference_id: referenceId,
+          pagbank_id: data.id,
+          status: "CREATED",
+          customer_name: customer?.name || null,
+          customer_email: customer?.email || null,
+          total_amount: totalAmount,
+          items: items,
+          shipping_address: shipping || null,
+        });
+        if (dbError) console.error("Error saving order:", dbError);
+        else console.log("Order saved:", referenceId);
+      }
 
       return new Response(
         JSON.stringify({
