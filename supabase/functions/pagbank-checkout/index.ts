@@ -80,8 +80,11 @@ serve(async (req) => {
       payment_notification_urls: [webhookUrl],
     };
 
-    console.log("Calling PagBank API v4 /checkouts...");
+    const payloadJson = JSON.stringify(checkoutPayload);
+    console.log("=== PAGBANK CHECKOUT REQUEST ===");
+    console.log("URL:", `${PAGBANK_BASE_URL}/checkouts`);
     console.log("Webhook URL:", webhookUrl);
+    console.log("Payload:", payloadJson);
 
     const response = await fetch(`${PAGBANK_BASE_URL}/checkouts`, {
       method: "POST",
@@ -90,12 +93,13 @@ serve(async (req) => {
         "Authorization": `Bearer ${PAGBANK_TOKEN}`,
         "x-api-version": "4.0",
       },
-      body: JSON.stringify(checkoutPayload),
+      body: payloadJson,
     });
 
     const responseText = await response.text();
-    console.log("PagBank response status:", response.status);
-    console.log("PagBank response:", responseText.substring(0, 1000));
+    console.log("=== PAGBANK CHECKOUT RESPONSE ===");
+    console.log("Status:", response.status);
+    console.log("Body:", responseText);
 
     if (response.ok) {
       const data = JSON.parse(responseText);

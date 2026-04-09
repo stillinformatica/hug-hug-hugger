@@ -81,8 +81,10 @@ serve(async (req) => {
       orderPayload.charges = charges;
     }
 
-    console.log("Calling PagBank API /orders...");
-    console.log("Request payload:", JSON.stringify(orderPayload).substring(0, 1000));
+    const payloadJson = JSON.stringify(orderPayload);
+    console.log("=== PAGBANK CREATE ORDER REQUEST ===");
+    console.log("URL:", `${PAGBANK_BASE_URL}/orders`);
+    console.log("Payload:", payloadJson);
 
     const response = await fetch(`${PAGBANK_BASE_URL}/orders`, {
       method: "POST",
@@ -91,12 +93,13 @@ serve(async (req) => {
         "Authorization": `Bearer ${PAGBANK_TOKEN}`,
         "x-api-version": "4.0",
       },
-      body: JSON.stringify(orderPayload),
+      body: payloadJson,
     });
 
     const responseText = await response.text();
-    console.log("PagBank response status:", response.status);
-    console.log("PagBank response:", responseText.substring(0, 1500));
+    console.log("=== PAGBANK CREATE ORDER RESPONSE ===");
+    console.log("Status:", response.status);
+    console.log("Body:", responseText);
 
     if (response.ok) {
       const data = JSON.parse(responseText);
