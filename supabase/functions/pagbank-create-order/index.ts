@@ -131,7 +131,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         error: "Erro no pedido PagBank",
-        details: responseText.substring(0, 500),
+        details: responseText,
         status_code: response.status,
       }),
       { status: response.status || 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
