@@ -105,7 +105,7 @@ serve(async (req) => {
       const data = JSON.parse(responseText);
       
       const paymentLink = data.links?.find((l: { rel: string }) => l.rel === "PAY");
-      const paymentUrl = paymentLink?.href || `https://pagamento.sandbox.pagbank.com.br/pagamento?code=${data.id}`;
+      const paymentUrl = paymentLink?.href || `https://pagamento.pagbank.com.br/pagamento?code=${data.id}`;
 
       // Save order to database
       if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
