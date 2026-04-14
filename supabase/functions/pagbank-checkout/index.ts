@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const PAGBANK_BASE_URL = "https://sandbox.api.pagseguro.com";
+const PAGBANK_BASE_URL = "https://api.pagseguro.com";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -105,7 +105,7 @@ serve(async (req) => {
       const data = JSON.parse(responseText);
       
       const paymentLink = data.links?.find((l: { rel: string }) => l.rel === "PAY");
-      const paymentUrl = paymentLink?.href || `https://pagamento.sandbox.pagbank.com.br/pagamento?code=${data.id}`;
+      const paymentUrl = paymentLink?.href || `https://pagamento.pagbank.com.br/pagamento?code=${data.id}`;
 
       // Save order to database
       if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
