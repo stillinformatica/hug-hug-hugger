@@ -1,0 +1,1 @@
+ALTER TABLE public.announced_products ADD COLUMN IF NOT EXISTS source_id integer UNIQUE;

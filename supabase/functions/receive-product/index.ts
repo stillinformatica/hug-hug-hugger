@@ -7,11 +7,14 @@ const corsHeaders = {
 };
 
 const ProductSchema = z.object({
+  source_id: z.number().optional(),
   name: z.string().min(1),
   description: z.string().default(""),
   category: z.string().default(""),
   price: z.union([z.string(), z.number()]).transform((v) => Number(v)),
+  quantity: z.number().default(0),
   images: z.array(z.string()).default([]),
+  isTesting: z.boolean().default(false),
   upsert: z.boolean().default(false),
 });
 
@@ -29,44 +32,52 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { name, description, category, price, images, upsert } = parsed.data;
+    const { source_id, name, description, category, price, quantity, images, isTesting, upsert } = parsed.data;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { data: existing } = await supabase
-      .from("announced_products")
-      .select("id")
-      .eq("name", name)
-      .maybeSingle();
+    // Match by source_id first, then fallback to name
+    let existing = null;
+    if (source_id) {
+      const { data } = await supabase
+        .from("announced_products")
+        .select("id")
+        .eq("source_id", source_id)
+        .maybeSingle();
+      existing = data;
+    }
+    if (!existing) {
+      const { data } = await supabase
+        .from("announced_products")
+        .select("id")
+        .eq("name", name)
+        .maybeSingle();
+      existing = data;
+    }
 
     let action = "created";
+    const payload = {
+      name,
+      description: description || null,
+      category: category || null,
+      price,
+      images,
+      source_id: source_id || null,
+    };
 
     if (existing && upsert) {
       const { error } = await supabase
         .from("announced_products")
-        .update({
-          description: description || null,
-          category: category || null,
-          price,
-          images,
-        })
+        .update(payload)
         .eq("id", existing.id);
-
       if (error) throw error;
       action = "updated";
     } else if (!existing) {
       const { error } = await supabase
         .from("announced_products")
-        .insert({
-          name,
-          description: description || null,
-          category: category || null,
-          price,
-          images,
-        });
-
+        .insert(payload);
       if (error) throw error;
       action = "created";
     } else {
