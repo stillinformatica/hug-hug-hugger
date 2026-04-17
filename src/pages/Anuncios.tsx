@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { fallbackProducts, normalizeProducts } from "@/lib/catalog";
 
 interface AnnouncedProduct {
   id: string;
@@ -23,16 +24,23 @@ const Anuncios = () => {
 
   useEffect(() => {
     const fetchProducts = async () => {
-      const { data, error } = await supabase
-        .from("announced_products")
-        .select("*")
-        .order("created_at", { ascending: false });
+      try {
+        const { data, error } = await supabase
+          .from("announced_products")
+          .select("*")
+          .order("created_at", { ascending: false });
 
-      if (!error && data) {
-        setProducts(data as unknown as AnnouncedProduct[]);
+        if (error) throw error;
+
+        const normalizedProducts = normalizeProducts(data as AnnouncedProduct[] | null | undefined);
+        setProducts(normalizedProducts.length > 0 ? normalizedProducts : fallbackProducts);
+      } catch {
+        setProducts(fallbackProducts);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
+
     fetchProducts();
   }, []);
 
