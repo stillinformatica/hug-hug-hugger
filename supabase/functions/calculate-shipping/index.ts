@@ -29,15 +29,41 @@ serve(async (req) => {
       });
     }
 
-    // Fetch address info from ViaCEP (free API)
-    const viaCepRes = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-    const viaCepData = await viaCepRes.json();
+    // Try multiple CEP providers (ViaCEP can be blocked from edge runtime)
+    const providers = [
+      `https://brasilapi.com.br/api/cep/v2/${cep}`,
+      `https://viacep.com.br/ws/${cep}/json/`,
+      `https://cep.awesomeapi.com.br/json/${cep}`,
+    ];
 
-    if (viaCepData.erro) {
-      return new Response(JSON.stringify({ error: "CEP não encontrado" }), {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    let viaCepData: any = null;
+    let lastErr: unknown = null;
+
+    for (const url of providers) {
+      try {
+        const r = await fetch(url, { headers: { Accept: "application/json" } });
+        if (!r.ok) continue;
+        const j = await r.json();
+        viaCepData = {
+          logradouro: j.logradouro || j.street || j.address || "",
+          bairro: j.bairro || j.neighborhood || j.district || "",
+          localidade: j.localidade || j.city || "",
+          uf: j.uf || j.state || "",
+          erro: j.erro === true || (!j.uf && !j.state),
+        };
+        if (!viaCepData.erro) break;
+      } catch (e) {
+        lastErr = e;
+        console.warn("CEP provider failed:", url, String(e));
+      }
+    }
+
+    if (!viaCepData || viaCepData.erro) {
+      console.error("All CEP providers failed:", lastErr);
+      return new Response(
+        JSON.stringify({ error: "CEP não encontrado", fallback: true }),
+        { status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
     // Calculate estimated delivery based on region
