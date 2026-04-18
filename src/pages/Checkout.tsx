@@ -115,8 +115,8 @@ const Checkout = () => {
       if (error) throw error;
 
       if (data?.payment_url) {
-        window.open(data.payment_url, "_blank");
         toast.success("Redirecionando para pagamento...");
+        window.location.href = data.payment_url;
       } else {
         toast.error("Erro ao gerar link de pagamento", { description: "Tente novamente" });
       }
