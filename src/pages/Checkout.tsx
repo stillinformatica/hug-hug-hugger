@@ -87,7 +87,7 @@ const Checkout = () => {
 
     setIsProcessingPayment(true);
     try {
-      const { data, error } = await supabase.functions.invoke("pagbank-checkout", {
+      const { data, error } = await supabase.functions.invoke("mercadopago-checkout", {
         body: {
           items: items.map((item) => ({
             name: item.name,
@@ -305,13 +305,13 @@ const Checkout = () => {
                   ) : (
                     <>
                       <CreditCard className="h-5 w-5 mr-2" />
-                      Pagar com PagBank
+                      Pagar com Mercado Pago
                     </>
                   )}
                 </Button>
 
                 <p className="text-xs text-muted-foreground text-center">
-                  Pagamento seguro via PagBank. Aceita PIX, cartão de crédito, débito e boleto.
+                  Pagamento seguro via Mercado Pago. Aceita PIX, cartão de crédito, débito e boleto.
                 </p>
               </CardContent>
             </Card>
