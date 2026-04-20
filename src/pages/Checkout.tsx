@@ -68,6 +68,17 @@ const Checkout = () => {
   const brickContainerRef = useRef<HTMLDivElement>(null);
   const brickControllerRef = useRef<any>(null);
   const mpInstanceRef = useRef<any>(null);
+  const checkoutDataRef = useRef({
+    totalPrice: 0,
+    customerEmail: "",
+    customerName: "",
+    customerPhone: "",
+    addressInfo: null as AddressInfo | null,
+    addressNumber: "",
+    addressComplement: "",
+    cep: "",
+    items: [] as typeof items,
+  });
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const shippingPrice = shippingOptions.find((o) => o.id === selectedShipping)?.price || 0;
@@ -160,7 +171,22 @@ const Checkout = () => {
     });
   };
 
-  // Renderiza o Payment Brick quando showPayment fica true
+  // Mantém os dados de checkout sempre atualizados em uma ref para o Brick
+  useEffect(() => {
+    checkoutDataRef.current = {
+      totalPrice,
+      customerEmail,
+      customerName,
+      customerPhone,
+      addressInfo,
+      addressNumber,
+      addressComplement,
+      cep,
+      items,
+    };
+  }, [totalPrice, customerEmail, customerName, customerPhone, addressInfo, addressNumber, addressComplement, cep, items]);
+
+  // Renderiza o Payment Brick quando showPayment fica true (sem remontar a cada digitação)
   useEffect(() => {
     if (!showPayment || paymentResult) return;
     let cancelled = false;
@@ -199,17 +225,18 @@ const Checkout = () => {
         const bricksBuilder = mp.bricks();
         readyTimeout = window.setTimeout(() => {
           if (cancelled) return;
+          // Não derruba o Brick: ele pode terminar de carregar logo depois.
+          // Apenas avisa o usuário e remove a mensagem de loading.
           setPaymentLoadingMessage(null);
-          toast.error("O pagamento demorou para abrir", {
-            description: "Tente novamente em alguns segundos.",
+          toast.warning("O pagamento está demorando para abrir", {
+            description: "Aguarde mais alguns segundos ou recarregue a página.",
           });
-          setShowPayment(false);
-        }, 15000);
+        }, 30000);
 
         brickControllerRef.current = await bricksBuilder.create("payment", PAYMENT_BRICK_CONTAINER_ID, {
           initialization: {
-            amount: totalPrice,
-            payer: { email: customerEmail },
+            amount: checkoutDataRef.current.totalPrice,
+            payer: { email: checkoutDataRef.current.customerEmail },
           },
           customization: {
             paymentMethods: {
@@ -233,31 +260,32 @@ const Checkout = () => {
             },
             onSubmit: async ({ formData }: any) => {
               setIsProcessingPayment(true);
+              const data_ = checkoutDataRef.current;
               try {
                 const { data, error } = await supabase.functions.invoke("mercadopago-process-payment", {
                   body: {
                     formData,
-                    items: items.map((item) => ({
+                    items: data_.items.map((item) => ({
                       name: item.name,
                       quantity: item.quantity,
                       unit_amount: item.price,
                       reference_id: item.productId,
                     })),
                     customer: {
-                      name: customerName,
-                      email: customerEmail,
-                      phone: customerPhone.replace(/\D/g, ""),
+                      name: data_.customerName,
+                      email: data_.customerEmail,
+                      phone: data_.customerPhone.replace(/\D/g, ""),
                     },
                     shipping: {
-                      street: addressInfo.street,
-                      number: addressNumber,
-                      complement: addressComplement,
-                      locality: addressInfo.neighborhood,
-                      city: addressInfo.city,
-                      region_code: addressInfo.state,
-                      postal_code: cep.replace(/\D/g, ""),
+                      street: data_.addressInfo?.street,
+                      number: data_.addressNumber,
+                      complement: data_.addressComplement,
+                      locality: data_.addressInfo?.neighborhood,
+                      city: data_.addressInfo?.city,
+                      region_code: data_.addressInfo?.state,
+                      postal_code: data_.cep.replace(/\D/g, ""),
                     },
-                    totalAmount: totalPrice,
+                    totalAmount: data_.totalPrice,
                   },
                 });
 
@@ -282,6 +310,10 @@ const Checkout = () => {
             },
             onError: (err: any) => {
               setPaymentLoadingMessage(null);
+              if (readyTimeout) {
+                window.clearTimeout(readyTimeout);
+                readyTimeout = null;
+              }
               console.error("MP Brick error:", err);
               toast.error("Erro no formulário de pagamento");
             },
@@ -310,7 +342,7 @@ const Checkout = () => {
         brickControllerRef.current = null;
       }
     };
-  }, [showPayment, paymentResult, totalPrice, customerEmail, items, customerName, customerPhone, addressInfo, addressNumber, addressComplement, cep, clearCart]);
+  }, [showPayment, paymentResult, clearCart]);
 
   if (items.length === 0 && !paymentResult) {
     return (
