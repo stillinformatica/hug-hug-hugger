@@ -68,6 +68,17 @@ const Checkout = () => {
   const brickContainerRef = useRef<HTMLDivElement>(null);
   const brickControllerRef = useRef<any>(null);
   const mpInstanceRef = useRef<any>(null);
+  const checkoutDataRef = useRef({
+    totalPrice: 0,
+    customerEmail: "",
+    customerName: "",
+    customerPhone: "",
+    addressInfo: null as AddressInfo | null,
+    addressNumber: "",
+    addressComplement: "",
+    cep: "",
+    items: [] as typeof items,
+  });
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const shippingPrice = shippingOptions.find((o) => o.id === selectedShipping)?.price || 0;
