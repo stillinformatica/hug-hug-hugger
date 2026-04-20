@@ -244,8 +244,11 @@ const Checkout = () => {
           },
         });
       } catch (err) {
-        console.error(err);
-        toast.error("Não foi possível carregar o pagamento");
+        console.error("Erro ao carregar Payment Brick:", err);
+        toast.error("Não foi possível carregar o pagamento", {
+          description: err instanceof Error ? err.message : "Tente novamente",
+        });
+        setShowPayment(false);
       }
     })();
 
