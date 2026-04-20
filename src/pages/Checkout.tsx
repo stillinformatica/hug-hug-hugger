@@ -103,8 +103,16 @@ const Checkout = () => {
 
     if (!window.MercadoPago) {
       await new Promise<void>((resolve, reject) => {
+        const existing = document.querySelector<HTMLScriptElement>('script[src="https://sdk.mercadopago.com/js/v2"]');
+        if (existing) {
+          if (window.MercadoPago) return resolve();
+          existing.addEventListener("load", () => resolve());
+          existing.addEventListener("error", () => reject(new Error("Falha ao carregar SDK MP")));
+          return;
+        }
         const script = document.createElement("script");
         script.src = "https://sdk.mercadopago.com/js/v2";
+        script.async = true;
         script.onload = () => resolve();
         script.onerror = () => reject(new Error("Falha ao carregar SDK MP"));
         document.body.appendChild(script);
@@ -112,7 +120,9 @@ const Checkout = () => {
     }
 
     const { data, error } = await supabase.functions.invoke("mercadopago-public-key");
-    if (error || !data?.public_key) throw new Error("Public key MP indisponível");
+    console.log("MP public-key response:", { data, error });
+    if (error) throw new Error(`Erro ao buscar public key: ${error.message}`);
+    if (!data?.public_key) throw new Error("MERCADOPAGO_PUBLIC_KEY não configurada no servidor");
 
     mpInstanceRef.current = new window.MercadoPago(data.public_key, { locale: "pt-BR" });
     return mpInstanceRef.current;
@@ -128,6 +138,10 @@ const Checkout = () => {
       return;
     }
     setShowPayment(true);
+    // Scroll para o brick após renderizar
+    setTimeout(() => {
+      brickContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 200);
   };
 
   // Renderiza o Payment Brick quando showPayment fica true
@@ -140,8 +154,19 @@ const Checkout = () => {
         const mp = await loadMercadoPagoSdk();
         if (cancelled) return;
 
+        // Aguarda o container existir no DOM
+        let attempts = 0;
+        while (!document.getElementById("mp-payment-brick") && attempts < 20) {
+          await new Promise((r) => setTimeout(r, 50));
+          attempts++;
+        }
+        if (cancelled) return;
+        if (!document.getElementById("mp-payment-brick")) {
+          throw new Error("Container do pagamento não encontrado");
+        }
+
         if (brickControllerRef.current) {
-          brickControllerRef.current.unmount();
+          try { brickControllerRef.current.unmount(); } catch { /* noop */ }
           brickControllerRef.current = null;
         }
 
