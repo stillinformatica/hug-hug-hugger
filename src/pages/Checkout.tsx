@@ -68,6 +68,7 @@ const Checkout = () => {
   const brickContainerRef = useRef<HTMLDivElement>(null);
   const brickControllerRef = useRef<any>(null);
   const mpInstanceRef = useRef<any>(null);
+  const sdkPreloadRef = useRef<Promise<any> | null>(null);
   const checkoutDataRef = useRef({
     totalPrice: 0,
     customerEmail: "",
@@ -129,8 +130,8 @@ const Checkout = () => {
         const existing = document.querySelector<HTMLScriptElement>('script[src="https://sdk.mercadopago.com/js/v2"]');
         if (existing) {
           if (window.MercadoPago) return resolve();
-          existing.addEventListener("load", () => resolve());
-          existing.addEventListener("error", () => reject(new Error("Falha ao carregar SDK MP")));
+          existing.addEventListener("load", () => resolve(), { once: true });
+          existing.addEventListener("error", () => reject(new Error("Falha ao carregar SDK MP")), { once: true });
           return;
         }
         const script = document.createElement("script");
@@ -151,6 +152,17 @@ const Checkout = () => {
     return mpInstanceRef.current;
   };
 
+  const ensureMercadoPagoSdk = () => {
+    if (!sdkPreloadRef.current) {
+      sdkPreloadRef.current = loadMercadoPagoSdk().catch((error) => {
+        sdkPreloadRef.current = null;
+        throw error;
+      });
+    }
+
+    return sdkPreloadRef.current;
+  };
+
   const goToPayment = async () => {
     if (!customerName || !customerEmail) {
       toast.error("Preencha seus dados", { description: "Nome e e-mail são obrigatórios" });
@@ -161,15 +173,30 @@ const Checkout = () => {
       return;
     }
 
-    setPaymentLoadingMessage("Preparando pagamento...");
-    setShowPayment(true);
+    try {
+      setPaymentLoadingMessage("Preparando pagamento...");
+      await ensureMercadoPagoSdk();
+      setShowPayment(true);
 
-    requestAnimationFrame(() => {
-      setTimeout(() => {
-        brickContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 150);
-    });
+      requestAnimationFrame(() => {
+        setTimeout(() => {
+          brickContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 150);
+      });
+    } catch (err) {
+      setPaymentLoadingMessage(null);
+      toast.error("Não foi possível iniciar o pagamento", {
+        description: err instanceof Error ? err.message : "Tente novamente",
+      });
+    }
   };
+
+  // Pré-carrega SDK/chave para reduzir a espera ao abrir o pagamento
+  useEffect(() => {
+    void ensureMercadoPagoSdk().catch((err) => {
+      console.error("Pré-carga do Mercado Pago falhou:", err);
+    });
+  }, []);
 
   // Mantém os dados de checkout sempre atualizados em uma ref para o Brick
   useEffect(() => {
@@ -211,7 +238,7 @@ const Checkout = () => {
           throw new Error("Área do pagamento não carregou a tempo");
         }
 
-        const mp = await loadMercadoPagoSdk();
+        const mp = await ensureMercadoPagoSdk();
         if (cancelled) return;
 
         if (brickControllerRef.current) {
