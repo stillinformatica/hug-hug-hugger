@@ -69,6 +69,15 @@ const Checkout = () => {
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const shippingPrice = shippingOptions.find((o) => o.id === selectedShipping)?.price || 0;
   const totalPrice = subtotal + shippingPrice;
+  const paymentRequirementsMessage = !customerName || !customerEmail
+    ? "Preencha nome e e-mail para continuar"
+    : !addressInfo
+      ? "Busque seu CEP para calcular o frete"
+      : !addressNumber
+        ? "Informe o número do endereço"
+        : !selectedShipping
+          ? "Escolha uma opção de envio"
+          : null;
 
   const handleCepSearch = async () => {
     if (cep.replace(/\D/g, "").length !== 8) {
@@ -509,20 +518,27 @@ const Checkout = () => {
                 </div>
 
                 {!showPayment && (
-                  <Button
-                    onClick={goToPayment}
-                    disabled={!addressInfo || !customerName || !customerEmail}
-                    size="lg"
-                    className="w-full rounded-xl"
-                  >
-                    <CreditCard className="h-5 w-5 mr-2" />
-                    Ir para Pagamento
-                  </Button>
+                  <div className="space-y-2">
+                    <Button
+                      onClick={goToPayment}
+                      size="lg"
+                      className="w-full rounded-xl"
+                    >
+                      <CreditCard className="h-5 w-5 mr-2" />
+                      Ir para Pagamento
+                    </Button>
+
+                    <p className="text-xs text-center min-h-4 text-muted-foreground">
+                      {paymentRequirementsMessage ?? "Pagamento seguro via Mercado Pago. Aceita Pix, cartão de crédito, débito e boleto."}
+                    </p>
+                  </div>
                 )}
 
-                <p className="text-xs text-muted-foreground text-center">
-                  Pagamento seguro via Mercado Pago. Aceita Pix, cartão de crédito, débito e boleto.
-                </p>
+                {showPayment && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    Pagamento seguro via Mercado Pago. Aceita Pix, cartão de crédito, débito e boleto.
+                  </p>
+                )}
               </CardContent>
             </Card>
           </motion.div>
