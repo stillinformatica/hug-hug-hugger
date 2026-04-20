@@ -44,6 +44,8 @@ declare global {
   }
 }
 
+const PAYMENT_BRICK_CONTAINER_ID = "mp-payment-brick";
+
 const Checkout = () => {
   const { items, clearCart } = useCartStore();
   const [searchQuery, setSearchQuery] = useState("");
@@ -162,6 +164,7 @@ const Checkout = () => {
   useEffect(() => {
     if (!showPayment || paymentResult) return;
     let cancelled = false;
+    let readyTimeout: number | null = null;
 
     const waitForBrickContainer = async () => {
       for (let attempt = 0; attempt < 40; attempt += 1) {
@@ -190,9 +193,20 @@ const Checkout = () => {
           brickControllerRef.current = null;
         }
 
+        container.innerHTML = "";
+
         setPaymentLoadingMessage("Abrindo formulário seguro...");
         const bricksBuilder = mp.bricks();
-        brickControllerRef.current = await bricksBuilder.create("payment", container, {
+        readyTimeout = window.setTimeout(() => {
+          if (cancelled) return;
+          setPaymentLoadingMessage(null);
+          toast.error("O pagamento demorou para abrir", {
+            description: "Tente novamente em alguns segundos.",
+          });
+          setShowPayment(false);
+        }, 15000);
+
+        brickControllerRef.current = await bricksBuilder.create("payment", PAYMENT_BRICK_CONTAINER_ID, {
           initialization: {
             amount: totalPrice,
             payer: { email: customerEmail },
@@ -209,6 +223,10 @@ const Checkout = () => {
           },
           callbacks: {
             onReady: () => {
+              if (readyTimeout) {
+                window.clearTimeout(readyTimeout);
+                readyTimeout = null;
+              }
               setPaymentLoadingMessage(null);
               brickContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
               console.log("MP Brick pronto");
@@ -270,6 +288,10 @@ const Checkout = () => {
           },
         });
       } catch (err) {
+        if (readyTimeout) {
+          window.clearTimeout(readyTimeout);
+          readyTimeout = null;
+        }
         setPaymentLoadingMessage(null);
         console.error("Erro ao carregar Payment Brick:", err);
         toast.error("Não foi possível carregar o pagamento", {
@@ -281,6 +303,7 @@ const Checkout = () => {
 
     return () => {
       cancelled = true;
+      if (readyTimeout) window.clearTimeout(readyTimeout);
       setPaymentLoadingMessage(null);
       if (brickControllerRef.current) {
         try { brickControllerRef.current.unmount(); } catch { /* noop */ }
@@ -483,7 +506,7 @@ const Checkout = () => {
                         <Loader2 className="h-4 w-4 animate-spin" /> {paymentLoadingMessage}
                       </div>
                     )}
-                    <div id="mp-payment-brick" ref={brickContainerRef} className="min-h-[420px]" />
+                    <div id={PAYMENT_BRICK_CONTAINER_ID} ref={brickContainerRef} className="min-h-[420px]" />
                     {isProcessingPayment && (
                       <div className="flex items-center justify-center gap-2 text-muted-foreground">
                         <Loader2 className="h-4 w-4 animate-spin" /> Processando pagamento...
