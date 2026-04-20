@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useCartStore } from "@/stores/cartStore";
 import { StoreHeader } from "@/components/store/StoreHeader";
@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Loader2, MapPin, Truck, CreditCard, ShoppingCart, Package } from "lucide-react";
+import { ArrowLeft, Loader2, MapPin, Truck, CreditCard, ShoppingCart, Package, CheckCircle2, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
@@ -28,6 +28,22 @@ interface AddressInfo {
   state: string;
 }
 
+interface PaymentResult {
+  id: string | number;
+  status: string;
+  status_detail?: string;
+  qr_code?: string;
+  qr_code_base64?: string;
+  ticket_url?: string;
+  boleto_url?: string;
+}
+
+declare global {
+  interface Window {
+    MercadoPago?: any;
+  }
+}
+
 const Checkout = () => {
   const { items, clearCart } = useCartStore();
   const [searchQuery, setSearchQuery] = useState("");
@@ -44,7 +60,15 @@ const Checkout = () => {
   const [addressNumber, setAddressNumber] = useState("");
   const [addressComplement, setAddressComplement] = useState("");
 
-  const totalPrice = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const [showPayment, setShowPayment] = useState(false);
+  const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null);
+  const brickContainerRef = useRef<HTMLDivElement>(null);
+  const brickControllerRef = useRef<any>(null);
+  const mpInstanceRef = useRef<any>(null);
+
+  const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+  const shippingPrice = shippingOptions.find((o) => o.id === selectedShipping)?.price || 0;
+  const totalPrice = subtotal + shippingPrice;
 
   const handleCepSearch = async () => {
     if (cep.replace(/\D/g, "").length !== 8) {
@@ -74,61 +98,142 @@ const Checkout = () => {
     }
   };
 
-  const handlePayment = async () => {
+  const loadMercadoPagoSdk = async (): Promise<any> => {
+    if (window.MercadoPago && mpInstanceRef.current) return mpInstanceRef.current;
+
+    if (!window.MercadoPago) {
+      await new Promise<void>((resolve, reject) => {
+        const script = document.createElement("script");
+        script.src = "https://sdk.mercadopago.com/js/v2";
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error("Falha ao carregar SDK MP"));
+        document.body.appendChild(script);
+      });
+    }
+
+    const { data, error } = await supabase.functions.invoke("mercadopago-public-key");
+    if (error || !data?.public_key) throw new Error("Public key MP indisponível");
+
+    mpInstanceRef.current = new window.MercadoPago(data.public_key, { locale: "pt-BR" });
+    return mpInstanceRef.current;
+  };
+
+  const goToPayment = async () => {
     if (!customerName || !customerEmail) {
       toast.error("Preencha seus dados", { description: "Nome e e-mail são obrigatórios" });
       return;
     }
-
-    if (!addressInfo || !selectedShipping) {
-      toast.error("Calcule o frete primeiro", { description: "Digite seu CEP para calcular o frete" });
+    if (!addressInfo || !selectedShipping || !addressNumber) {
+      toast.error("Endereço incompleto", { description: "Calcule o frete e informe o número" });
       return;
     }
-
-    setIsProcessingPayment(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("mercadopago-checkout", {
-        body: {
-          items: items.map((item) => ({
-            name: item.name,
-            quantity: item.quantity,
-            unit_amount: item.price,
-            reference_id: item.productId,
-          })),
-          customer: {
-            name: customerName,
-            email: customerEmail,
-            phone: customerPhone.replace(/\D/g, ""),
-          },
-          shipping: {
-            street: addressInfo.street,
-            number: addressNumber,
-            complement: addressComplement,
-            locality: addressInfo.neighborhood,
-            city: addressInfo.city,
-            region_code: addressInfo.state,
-            postal_code: cep.replace(/\D/g, ""),
-          },
-        },
-      });
-
-      if (error) throw error;
-
-      if (data?.payment_url) {
-        toast.success("Redirecionando para pagamento...");
-        window.location.href = data.payment_url;
-      } else {
-        toast.error("Erro ao gerar link de pagamento", { description: "Tente novamente" });
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Erro ao processar pagamento", { description: "Tente novamente em instantes" });
-    } finally {
-      setIsProcessingPayment(false);
-    }
+    setShowPayment(true);
   };
 
-  if (items.length === 0) {
+  // Renderiza o Payment Brick quando showPayment fica true
+  useEffect(() => {
+    if (!showPayment || paymentResult) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const mp = await loadMercadoPagoSdk();
+        if (cancelled) return;
+
+        if (brickControllerRef.current) {
+          brickControllerRef.current.unmount();
+          brickControllerRef.current = null;
+        }
+
+        const bricksBuilder = mp.bricks();
+        brickControllerRef.current = await bricksBuilder.create("payment", "mp-payment-brick", {
+          initialization: {
+            amount: totalPrice,
+            payer: { email: customerEmail },
+          },
+          customization: {
+            paymentMethods: {
+              creditCard: "all",
+              debitCard: "all",
+              ticket: "all",
+              bankTransfer: "all", // Pix
+              maxInstallments: 12,
+            },
+            visual: { style: { theme: "default" } },
+          },
+          callbacks: {
+            onReady: () => console.log("MP Brick pronto"),
+            onSubmit: async ({ formData }: any) => {
+              setIsProcessingPayment(true);
+              try {
+                const { data, error } = await supabase.functions.invoke("mercadopago-process-payment", {
+                  body: {
+                    formData,
+                    items: items.map((item) => ({
+                      name: item.name,
+                      quantity: item.quantity,
+                      unit_amount: item.price,
+                      reference_id: item.productId,
+                    })),
+                    customer: {
+                      name: customerName,
+                      email: customerEmail,
+                      phone: customerPhone.replace(/\D/g, ""),
+                    },
+                    shipping: {
+                      street: addressInfo.street,
+                      number: addressNumber,
+                      complement: addressComplement,
+                      locality: addressInfo.neighborhood,
+                      city: addressInfo.city,
+                      region_code: addressInfo.state,
+                      postal_code: cep.replace(/\D/g, ""),
+                    },
+                    totalAmount: totalPrice,
+                  },
+                });
+
+                if (error) throw error;
+
+                setPaymentResult(data);
+                if (data.status === "approved") {
+                  toast.success("Pagamento aprovado!");
+                  clearCart();
+                } else if (data.status === "pending" || data.status === "in_process") {
+                  toast.info("Aguardando confirmação do pagamento");
+                  if (data.qr_code || data.boleto_url) clearCart();
+                } else {
+                  toast.error("Pagamento recusado", { description: data.status_detail || "Tente outro método" });
+                }
+              } catch (err) {
+                console.error(err);
+                toast.error("Erro ao processar pagamento");
+              } finally {
+                setIsProcessingPayment(false);
+              }
+            },
+            onError: (err: any) => {
+              console.error("MP Brick error:", err);
+              toast.error("Erro no formulário de pagamento");
+            },
+          },
+        });
+      } catch (err) {
+        console.error(err);
+        toast.error("Não foi possível carregar o pagamento");
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (brickControllerRef.current) {
+        try { brickControllerRef.current.unmount(); } catch { /* noop */ }
+        brickControllerRef.current = null;
+      }
+    };
+  }, [showPayment, paymentResult, totalPrice, customerEmail]);
+
+  if (items.length === 0 && !paymentResult) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <StoreHeader searchQuery={searchQuery} onSearchChange={setSearchQuery} />
@@ -139,6 +244,64 @@ const Checkout = () => {
             <Button variant="outline"><ArrowLeft className="mr-2 h-4 w-4" />Continuar comprando</Button>
           </Link>
         </div>
+        <StoreFooter />
+      </div>
+    );
+  }
+
+  // Tela de resultado (PIX / Boleto / Aprovado)
+  if (paymentResult) {
+    const isApproved = paymentResult.status === "approved";
+    const isPix = !!paymentResult.qr_code;
+    const isBoleto = !!paymentResult.boleto_url;
+
+    return (
+      <div className="min-h-screen bg-background flex flex-col">
+        <StoreHeader searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+        <main className="flex-1 max-w-2xl mx-auto px-4 py-8 w-full">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                {isApproved ? <CheckCircle2 className="h-6 w-6 text-primary" /> : <Package className="h-6 w-6 text-primary" />}
+                {isApproved ? "Pagamento Aprovado!" : isPix ? "Pague com Pix" : isBoleto ? "Boleto Gerado" : "Pagamento em processamento"}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {isPix && paymentResult.qr_code_base64 && (
+                <div className="flex flex-col items-center gap-3">
+                  <img
+                    src={`data:image/png;base64,${paymentResult.qr_code_base64}`}
+                    alt="QR Code Pix"
+                    className="w-64 h-64"
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      navigator.clipboard.writeText(paymentResult.qr_code!);
+                      toast.success("Código Pix copiado!");
+                    }}
+                  >
+                    <Copy className="h-4 w-4 mr-2" /> Copiar código Pix
+                  </Button>
+                  <p className="text-xs text-muted-foreground text-center break-all max-w-md">
+                    {paymentResult.qr_code}
+                  </p>
+                </div>
+              )}
+              {isBoleto && (
+                <Button asChild className="w-full">
+                  <a href={paymentResult.boleto_url} target="_blank" rel="noreferrer">Abrir Boleto</a>
+                </Button>
+              )}
+              {isApproved && (
+                <p className="text-muted-foreground">Recebemos seu pagamento. Em breve você receberá um e-mail com os detalhes.</p>
+              )}
+              <Link to="/">
+                <Button variant="outline" className="w-full"><ArrowLeft className="mr-2 h-4 w-4" /> Voltar à loja</Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </main>
         <StoreFooter />
       </div>
     );
@@ -248,6 +411,27 @@ const Checkout = () => {
                 </CardContent>
               </Card>
             </motion.div>
+
+            {showPayment && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <CreditCard className="h-5 w-5 text-primary" />
+                      Pagamento
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div id="mp-payment-brick" ref={brickContainerRef} />
+                    {isProcessingPayment && (
+                      <div className="flex items-center justify-center gap-2 mt-4 text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" /> Processando pagamento...
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
           </div>
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
@@ -279,11 +463,13 @@ const Checkout = () => {
                 <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Subtotal</span>
-                    <span className="text-foreground">R$ {totalPrice.toFixed(2).replace(".", ",")}</span>
+                    <span className="text-foreground">R$ {subtotal.toFixed(2).replace(".", ",")}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-muted-foreground">Frete</span>
-                    <span className="text-primary font-medium">GRÁTIS</span>
+                    <span className="text-foreground">
+                      {shippingPrice === 0 ? "GRÁTIS" : `R$ ${shippingPrice.toFixed(2).replace(".", ",")}`}
+                    </span>
                   </div>
                 </div>
 
@@ -294,24 +480,20 @@ const Checkout = () => {
                   <span className="text-xl font-bold text-primary">R$ {totalPrice.toFixed(2).replace(".", ",")}</span>
                 </div>
 
-                <Button
-                  onClick={handlePayment}
-                  disabled={isProcessingPayment || !addressInfo || !customerName || !customerEmail}
-                  size="lg"
-                  className="w-full rounded-xl"
-                >
-                  {isProcessingPayment ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <>
-                      <CreditCard className="h-5 w-5 mr-2" />
-                      Pagar com Mercado Pago
-                    </>
-                  )}
-                </Button>
+                {!showPayment && (
+                  <Button
+                    onClick={goToPayment}
+                    disabled={!addressInfo || !customerName || !customerEmail}
+                    size="lg"
+                    className="w-full rounded-xl"
+                  >
+                    <CreditCard className="h-5 w-5 mr-2" />
+                    Ir para Pagamento
+                  </Button>
+                )}
 
                 <p className="text-xs text-muted-foreground text-center">
-                  Pagamento seguro via Mercado Pago. Aceita PIX, cartão de crédito, débito e boleto.
+                  Pagamento seguro via Mercado Pago. Aceita Pix, cartão de crédito, débito e boleto.
                 </p>
               </CardContent>
             </Card>
