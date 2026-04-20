@@ -62,6 +62,7 @@ const Checkout = () => {
 
   const [showPayment, setShowPayment] = useState(false);
   const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null);
+  const [paymentLoadingMessage, setPaymentLoadingMessage] = useState<string | null>(null);
   const brickContainerRef = useRef<HTMLDivElement>(null);
   const brickControllerRef = useRef<any>(null);
   const mpInstanceRef = useRef<any>(null);
@@ -146,11 +147,15 @@ const Checkout = () => {
       toast.error("Endereço incompleto", { description: "Calcule o frete e informe o número" });
       return;
     }
+
+    setPaymentLoadingMessage("Preparando pagamento...");
     setShowPayment(true);
-    // Scroll para o brick após renderizar
-    setTimeout(() => {
-      brickContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 200);
+
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        brickContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 150);
+    });
   };
 
   // Renderiza o Payment Brick quando showPayment fica true
@@ -158,29 +163,36 @@ const Checkout = () => {
     if (!showPayment || paymentResult) return;
     let cancelled = false;
 
+    const waitForBrickContainer = async () => {
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        if (brickContainerRef.current && document.body.contains(brickContainerRef.current)) {
+          return brickContainerRef.current;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      return null;
+    };
+
     (async () => {
       try {
+        setPaymentLoadingMessage("Carregando métodos de pagamento...");
+        const container = await waitForBrickContainer();
+        if (cancelled) return;
+        if (!container) {
+          throw new Error("Área do pagamento não carregou a tempo");
+        }
+
         const mp = await loadMercadoPagoSdk();
         if (cancelled) return;
-
-        // Aguarda o container existir no DOM
-        let attempts = 0;
-        while (!document.getElementById("mp-payment-brick") && attempts < 20) {
-          await new Promise((r) => setTimeout(r, 50));
-          attempts++;
-        }
-        if (cancelled) return;
-        if (!document.getElementById("mp-payment-brick")) {
-          throw new Error("Container do pagamento não encontrado");
-        }
 
         if (brickControllerRef.current) {
           try { brickControllerRef.current.unmount(); } catch { /* noop */ }
           brickControllerRef.current = null;
         }
 
+        setPaymentLoadingMessage("Abrindo formulário seguro...");
         const bricksBuilder = mp.bricks();
-        brickControllerRef.current = await bricksBuilder.create("payment", "mp-payment-brick", {
+        brickControllerRef.current = await bricksBuilder.create("payment", container, {
           initialization: {
             amount: totalPrice,
             payer: { email: customerEmail },
@@ -190,13 +202,17 @@ const Checkout = () => {
               creditCard: "all",
               debitCard: "all",
               ticket: "all",
-              bankTransfer: "all", // Pix
+              bankTransfer: "all",
               maxInstallments: 12,
             },
             visual: { style: { theme: "default" } },
           },
           callbacks: {
-            onReady: () => console.log("MP Brick pronto"),
+            onReady: () => {
+              setPaymentLoadingMessage(null);
+              brickContainerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+              console.log("MP Brick pronto");
+            },
             onSubmit: async ({ formData }: any) => {
               setIsProcessingPayment(true);
               try {
@@ -247,12 +263,14 @@ const Checkout = () => {
               }
             },
             onError: (err: any) => {
+              setPaymentLoadingMessage(null);
               console.error("MP Brick error:", err);
               toast.error("Erro no formulário de pagamento");
             },
           },
         });
       } catch (err) {
+        setPaymentLoadingMessage(null);
         console.error("Erro ao carregar Payment Brick:", err);
         toast.error("Não foi possível carregar o pagamento", {
           description: err instanceof Error ? err.message : "Tente novamente",
@@ -263,12 +281,13 @@ const Checkout = () => {
 
     return () => {
       cancelled = true;
+      setPaymentLoadingMessage(null);
       if (brickControllerRef.current) {
         try { brickControllerRef.current.unmount(); } catch { /* noop */ }
         brickControllerRef.current = null;
       }
     };
-  }, [showPayment, paymentResult, totalPrice, customerEmail]);
+  }, [showPayment, paymentResult, totalPrice, customerEmail, items, customerName, customerPhone, addressInfo, addressNumber, addressComplement, cep, clearCart]);
 
   if (items.length === 0 && !paymentResult) {
     return (
@@ -458,10 +477,15 @@ const Checkout = () => {
                       Pagamento
                     </CardTitle>
                   </CardHeader>
-                  <CardContent>
-                    <div id="mp-payment-brick" ref={brickContainerRef} />
+                  <CardContent className="space-y-4">
+                    {paymentLoadingMessage && (
+                      <div className="flex items-center justify-center gap-2 rounded-xl border border-border bg-secondary/30 px-4 py-3 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" /> {paymentLoadingMessage}
+                      </div>
+                    )}
+                    <div id="mp-payment-brick" ref={brickContainerRef} className="min-h-[420px]" />
                     {isProcessingPayment && (
-                      <div className="flex items-center justify-center gap-2 mt-4 text-muted-foreground">
+                      <div className="flex items-center justify-center gap-2 text-muted-foreground">
                         <Loader2 className="h-4 w-4 animate-spin" /> Processando pagamento...
                       </div>
                     )}
