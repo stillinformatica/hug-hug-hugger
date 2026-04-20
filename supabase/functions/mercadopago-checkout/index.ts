@@ -69,6 +69,15 @@ serve(async (req) => {
       auto_return: "approved",
       notification_url: webhookUrl,
       statement_descriptor: "STILL INFO",
+      payment_methods: {
+        excluded_payment_types: [
+          { id: "credit_card" },
+          { id: "ticket" },
+          { id: "atm" },
+          { id: "bank_transfer" },
+        ],
+        installments: 1,
+      },
     };
 
     console.log("=== MP CREATE PREFERENCE ===");
