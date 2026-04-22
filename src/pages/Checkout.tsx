@@ -265,6 +265,29 @@ const Checkout = () => {
     };
   }, [customerName, customerEmail, customerPhone, addressInfo, addressNumber, addressComplement, cep, items, totalPrice]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const paymentStatus = params.get("payment");
+    const referenceId = params.get("ref") || params.get("external_reference") || "";
+
+    if (!paymentStatus) return;
+
+    if (paymentStatus === "success") {
+      setPaymentResult({ status: "approved", reference_id: referenceId || "pedido" });
+      clearCart();
+      return;
+    }
+
+    if (paymentStatus === "pending") {
+      setPaymentResult({ status: "pending", reference_id: referenceId || "pedido" });
+      return;
+    }
+
+    if (paymentStatus === "failure") {
+      setPaymentResult({ status: "rejected", reference_id: referenceId || "pedido" });
+    }
+  }, [location.search, clearCart]);
+
   const startPayment = () => {
     if (paymentRequirementsMessage) {
       toast.error("Dados incompletos", { description: paymentRequirementsMessage });
@@ -389,28 +412,27 @@ const Checkout = () => {
               onError: (error: any) => {
                 console.error("Brick error:", error);
                 setBrickLoading(false);
-                setBrickError("Erro no formulário de pagamento. Recarregue a página.");
+                setBrickError(getBrickErrorMessage(error));
               },
             },
           }),
           new Promise<never>((_, reject) => {
             window.setTimeout(() => {
               if (!readyResolved) {
-                reject(new Error("O formulário de pagamento não respondeu a tempo"));
+                reject(new Error(BRICK_INIT_FAILURE_MESSAGE));
               }
             }, BRICK_LOAD_TIMEOUT_MS);
           }),
         ]);
 
         brickControllerRef.current = controller;
-        // Garante que o loader some assim que o controller existe (caso onReady atrase)
         window.setTimeout(() => {
           if (!cancelled) setBrickLoading(false);
         }, 1500);
       } catch (err) {
         console.error(err);
         if (!cancelled) {
-          setBrickError(err instanceof Error ? err.message : "Não foi possível carregar o pagamento");
+          setBrickError(getBrickErrorMessage(err));
           setBrickLoading(false);
         }
       }
