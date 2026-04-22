@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useCartStore } from "@/stores/cartStore";
 import { StoreHeader } from "@/components/store/StoreHeader";
 import { StoreFooter } from "@/components/store/StoreFooter";
@@ -46,6 +46,46 @@ type PaymentResult = {
   qr_code_base64?: string;
   ticket_url?: string;
   boleto_url?: string;
+};
+
+const BRICK_INIT_FAILURE_MESSAGE = "O formulário do Mercado Pago não foi liberado para esta aplicação ou domínio. Você pode continuar pelo checkout seguro do Mercado Pago enquanto ajusta a configuração da aplicação.";
+
+const normalizeMpErrorMessage = (error: unknown) => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object") {
+    const maybeMessage = [
+      (error as { message?: string }).message,
+      (error as { error?: string }).error,
+      (error as { cause?: { message?: string } }).cause?.message,
+    ].find((value) => typeof value === "string" && value.trim().length > 0);
+
+    if (maybeMessage) return maybeMessage;
+
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return "Erro desconhecido ao carregar o pagamento";
+    }
+  }
+
+  return "Erro desconhecido ao carregar o pagamento";
+};
+
+const getBrickErrorMessage = (error: unknown) => {
+  const message = normalizeMpErrorMessage(error);
+  const lowerMessage = message.toLowerCase();
+
+  if (
+    lowerMessage.includes("bricks component initialization failed") ||
+    lowerMessage.includes("payment_methods/search") ||
+    lowerMessage.includes("404") ||
+    lowerMessage.includes("403")
+  ) {
+    return BRICK_INIT_FAILURE_MESSAGE;
+  }
+
+  return message;
 };
 
 const SDK_URL = "https://sdk.mercadopago.com/js/v2";
@@ -130,6 +170,7 @@ const loadMpSdk = (() => {
 
 const Checkout = () => {
   const { items, clearCart } = useCartStore();
+  const location = useLocation();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [cep, setCep] = useState("");
@@ -147,6 +188,7 @@ const Checkout = () => {
   const [showBrick, setShowBrick] = useState(false);
   const [brickLoading, setBrickLoading] = useState(false);
   const [brickError, setBrickError] = useState<string | null>(null);
+  const [redirectCheckoutLoading, setRedirectCheckoutLoading] = useState(false);
   const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null);
 
   const brickControllerRef = useRef<any>(null);
