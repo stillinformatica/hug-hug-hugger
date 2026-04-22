@@ -620,7 +620,7 @@ const Checkout = () => {
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
-                    {brickLoading && (
+                    {brickLoading && !brickError && (
                       <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
                         <Loader2 className="h-5 w-5 animate-spin" />
                         Carregando formulário de pagamento...
@@ -628,11 +628,12 @@ const Checkout = () => {
                     )}
                     {brickError && (
                       <div className="text-center py-6 space-y-3">
-                        <p className="text-destructive text-sm">{brickError}</p>
+                        <p className="text-destructive text-sm whitespace-pre-wrap break-words">{brickError}</p>
                         <Button
                           variant="outline"
                           onClick={() => {
                             setBrickError(null);
+                            setBrickLoading(false);
                             setShowBrick(false);
                             setTimeout(() => setShowBrick(true), 50);
                           }}
