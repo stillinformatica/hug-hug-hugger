@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { useCartStore } from "@/stores/cartStore";
 import { StoreHeader } from "@/components/store/StoreHeader";
 import { StoreFooter } from "@/components/store/StoreFooter";
@@ -8,7 +8,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { ArrowLeft, Loader2, MapPin, Truck, CreditCard, ShoppingCart, Package, CheckCircle2, Clock, XCircle } from "lucide-react";
+import {
+  ArrowLeft,
+  Loader2,
+  MapPin,
+  Truck,
+  CreditCard,
+  ShoppingCart,
+  Package,
+  CheckCircle2,
+  Clock,
+  XCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
@@ -28,11 +39,43 @@ interface AddressInfo {
   state: string;
 }
 
+type PaymentResult = {
+  status: "approved" | "pending" | "rejected" | "in_process";
+  reference_id: string;
+  qr_code?: string;
+  qr_code_base64?: string;
+  ticket_url?: string;
+  boleto_url?: string;
+};
+
+const SDK_URL = "https://sdk.mercadopago.com/js/v2";
+
+const loadMpSdk = (() => {
+  let promise: Promise<void> | null = null;
+  return () => {
+    if (promise) return promise;
+    promise = new Promise<void>((resolve, reject) => {
+      if (typeof window === "undefined") return reject(new Error("window indisponível"));
+      if ((window as any).MercadoPago) return resolve();
+      const existing = document.querySelector<HTMLScriptElement>(`script[src="${SDK_URL}"]`);
+      if (existing) {
+        existing.addEventListener("load", () => resolve());
+        existing.addEventListener("error", () => reject(new Error("Falha ao carregar SDK")));
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = SDK_URL;
+      script.async = true;
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error("Falha ao carregar SDK Mercado Pago"));
+      document.head.appendChild(script);
+    });
+    return promise;
+  };
+})();
+
 const Checkout = () => {
   const { items, clearCart } = useCartStore();
-  const [searchParams] = useSearchParams();
-  const paymentStatus = searchParams.get("payment");
-  const paymentRef = searchParams.get("ref");
 
   const [searchQuery, setSearchQuery] = useState("");
   const [cep, setCep] = useState("");
@@ -40,13 +83,20 @@ const Checkout = () => {
   const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
   const [selectedShipping, setSelectedShipping] = useState<string | null>(null);
   const [isLoadingShipping, setIsLoadingShipping] = useState(false);
-  const [isRedirecting, setIsRedirecting] = useState(false);
 
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [addressNumber, setAddressNumber] = useState("");
   const [addressComplement, setAddressComplement] = useState("");
+
+  const [showBrick, setShowBrick] = useState(false);
+  const [brickLoading, setBrickLoading] = useState(false);
+  const [brickError, setBrickError] = useState<string | null>(null);
+  const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null);
+
+  const brickControllerRef = useRef<any>(null);
+  const checkoutDataRef = useRef<any>(null);
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const shippingPrice = shippingOptions.find((o) => o.id === selectedShipping)?.price || 0;
@@ -61,13 +111,6 @@ const Checkout = () => {
         : !selectedShipping
           ? "Escolha uma opção de envio"
           : null;
-
-  // Limpa carrinho se voltou do MP com aprovação
-  useEffect(() => {
-    if (paymentStatus === "success") {
-      clearCart();
-    }
-  }, [paymentStatus, clearCart]);
 
   const handleCepSearch = async () => {
     if (cep.replace(/\D/g, "").length !== 8) {
@@ -97,33 +140,16 @@ const Checkout = () => {
     }
   };
 
-  const goToPayment = async () => {
-    if (!customerName || !customerEmail) {
-      toast.error("Preencha seus dados", { description: "Nome e e-mail são obrigatórios" });
-      return;
-    }
-    if (!addressInfo || !selectedShipping || !addressNumber) {
-      toast.error("Endereço incompleto", { description: "Calcule o frete e informe o número" });
-      return;
-    }
-
-    setIsRedirecting(true);
-    try {
-      const { data, error } = await supabase.functions.invoke("mercadopago-create-preference", {
-        body: {
-          items: items.map((item) => ({
-            name: item.name,
-            quantity: item.quantity,
-            unit_amount: item.price,
-            reference_id: item.productId,
-            image: item.image,
-          })),
-          customer: {
-            name: customerName,
-            email: customerEmail,
-            phone: customerPhone.replace(/\D/g, ""),
-          },
-          shipping: {
+  // Mantém os dados atualizados em ref para o callback do Brick
+  useEffect(() => {
+    checkoutDataRef.current = {
+      customer: {
+        name: customerName,
+        email: customerEmail,
+        phone: customerPhone.replace(/\D/g, ""),
+      },
+      shipping: addressInfo
+        ? {
             street: addressInfo.street,
             number: addressNumber,
             complement: addressComplement,
@@ -131,30 +157,142 @@ const Checkout = () => {
             city: addressInfo.city,
             region_code: addressInfo.state,
             postal_code: cep.replace(/\D/g, ""),
-          },
-          shippingCost: shippingPrice,
-        },
-      });
+          }
+        : null,
+      items: items.map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        unit_amount: item.price,
+        reference_id: item.productId,
+      })),
+      totalAmount: totalPrice,
+    };
+  }, [customerName, customerEmail, customerPhone, addressInfo, addressNumber, addressComplement, cep, items, totalPrice]);
 
-      if (error) throw error;
-      const redirectUrl = data?.init_point || data?.sandbox_init_point;
-      if (!redirectUrl) throw new Error("Link de pagamento não foi retornado");
-
-      toast.success("Redirecionando para o Mercado Pago...");
-      window.location.href = redirectUrl;
-    } catch (err) {
-      setIsRedirecting(false);
-      console.error(err);
-      toast.error("Não foi possível iniciar o pagamento", {
-        description: err instanceof Error ? err.message : "Tente novamente",
-      });
+  const startPayment = () => {
+    if (paymentRequirementsMessage) {
+      toast.error("Dados incompletos", { description: paymentRequirementsMessage });
+      return;
     }
+    setBrickError(null);
+    setShowBrick(true);
   };
 
-  // Tela de retorno do Mercado Pago
-  if (paymentStatus) {
-    const isSuccess = paymentStatus === "success";
-    const isPending = paymentStatus === "pending";
+  // Inicializa o Payment Brick quando o usuário clica em "Pagar"
+  useEffect(() => {
+    if (!showBrick) return;
+    let cancelled = false;
+
+    const init = async () => {
+      setBrickLoading(true);
+      try {
+        await loadMpSdk();
+        const { data: keyData, error: keyErr } = await supabase.functions.invoke("mercadopago-public-key");
+        if (keyErr) throw keyErr;
+        const publicKey = keyData?.public_key;
+        if (!publicKey) throw new Error("Chave pública do Mercado Pago não configurada");
+
+        if (cancelled) return;
+
+        const mp = new (window as any).MercadoPago(publicKey, { locale: "pt-BR" });
+        const bricksBuilder = mp.bricks();
+
+        // Garante container limpo
+        const container = document.getElementById("mp-payment-brick");
+        if (container) container.innerHTML = "";
+
+        const controller = await bricksBuilder.create("payment", "mp-payment-brick", {
+          initialization: {
+            amount: Number(totalPrice.toFixed(2)),
+            payer: { email: customerEmail },
+          },
+          customization: {
+            paymentMethods: {
+              creditCard: "all",
+              debitCard: "all",
+              bankTransfer: "all", // PIX
+              ticket: "all",       // Boleto
+              maxInstallments: 12,
+            },
+            visual: { style: { theme: "default" } },
+          },
+          callbacks: {
+            onReady: () => {
+              setBrickLoading(false);
+            },
+            onSubmit: async ({ formData }: { formData: any }) => {
+              const ctx = checkoutDataRef.current;
+              try {
+                const { data, error } = await supabase.functions.invoke("mercadopago-process-payment", {
+                  body: {
+                    formData,
+                    items: ctx.items,
+                    customer: ctx.customer,
+                    shipping: ctx.shipping,
+                    totalAmount: ctx.totalAmount,
+                  },
+                });
+                if (error) throw error;
+                if (data?.error) throw new Error(data.error);
+
+                const status = data.status as PaymentResult["status"];
+                setPaymentResult({
+                  status,
+                  reference_id: data.reference_id,
+                  qr_code: data.qr_code,
+                  qr_code_base64: data.qr_code_base64,
+                  ticket_url: data.ticket_url,
+                  boleto_url: data.boleto_url,
+                });
+                if (status === "approved") {
+                  clearCart();
+                  toast.success("Pagamento aprovado!");
+                } else if (status === "pending" || status === "in_process") {
+                  toast.info("Pagamento em processamento");
+                } else {
+                  toast.error("Pagamento não aprovado");
+                }
+              } catch (err) {
+                console.error(err);
+                toast.error("Erro ao processar pagamento", {
+                  description: err instanceof Error ? err.message : "Tente novamente",
+                });
+                throw err;
+              }
+            },
+            onError: (error: any) => {
+              console.error("Brick error:", error);
+              setBrickError("Erro no formulário de pagamento. Recarregue a página.");
+            },
+          },
+        });
+
+        brickControllerRef.current = controller;
+      } catch (err) {
+        console.error(err);
+        if (!cancelled) {
+          setBrickError(err instanceof Error ? err.message : "Não foi possível carregar o pagamento");
+          setBrickLoading(false);
+        }
+      }
+    };
+
+    init();
+
+    return () => {
+      cancelled = true;
+      try {
+        brickControllerRef.current?.unmount?.();
+      } catch (_) { /* noop */ }
+      brickControllerRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showBrick]);
+
+  // Tela de resultado do pagamento (sem redirect — direto na página)
+  if (paymentResult) {
+    const isSuccess = paymentResult.status === "approved";
+    const isPending = paymentResult.status === "pending" || paymentResult.status === "in_process";
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <StoreHeader searchQuery={searchQuery} onSearchChange={setSearchQuery} />
@@ -169,18 +307,58 @@ const Checkout = () => {
                 ) : (
                   <XCircle className="h-6 w-6 text-destructive" />
                 )}
-                {isSuccess ? "Pagamento Aprovado!" : isPending ? "Pagamento Pendente" : "Pagamento não concluído"}
+                {isSuccess
+                  ? "Pagamento Aprovado!"
+                  : isPending
+                    ? "Pagamento Pendente"
+                    : "Pagamento não concluído"}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {isSuccess && (
                 <p className="text-muted-foreground">
-                  Recebemos seu pagamento{paymentRef ? ` (pedido ${paymentRef})` : ""}. Em breve você receberá um e-mail com os detalhes do envio.
+                  Recebemos seu pagamento (pedido {paymentResult.reference_id}). Em breve você receberá um e-mail com os detalhes do envio.
                 </p>
               )}
-              {isPending && (
+              {isPending && paymentResult.qr_code_base64 && (
+                <div className="space-y-3 text-center">
+                  <p className="text-sm text-muted-foreground">Escaneie o QR Code para pagar com PIX:</p>
+                  <img
+                    src={`data:image/png;base64,${paymentResult.qr_code_base64}`}
+                    alt="QR Code PIX"
+                    className="mx-auto w-64 h-64 border rounded-xl"
+                  />
+                  {paymentResult.qr_code && (
+                    <div className="space-y-2">
+                      <p className="text-xs text-muted-foreground">Ou copie o código:</p>
+                      <code className="block p-2 bg-secondary rounded text-xs break-all">
+                        {paymentResult.qr_code}
+                      </code>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          navigator.clipboard.writeText(paymentResult.qr_code!);
+                          toast.success("Código copiado");
+                        }}
+                      >
+                        Copiar código PIX
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+              {isPending && paymentResult.boleto_url && (
+                <div className="text-center space-y-2">
+                  <p className="text-sm text-muted-foreground">Boleto gerado com sucesso.</p>
+                  <a href={paymentResult.boleto_url} target="_blank" rel="noopener noreferrer">
+                    <Button variant="outline">Abrir boleto</Button>
+                  </a>
+                </div>
+              )}
+              {isPending && !paymentResult.qr_code_base64 && !paymentResult.boleto_url && (
                 <p className="text-muted-foreground">
-                  Seu pagamento está sendo processado. Assim que for confirmado, enviaremos um e-mail de confirmação.
+                  Seu pagamento está sendo processado. Assim que for confirmado, enviaremos um e-mail.
                 </p>
               )}
               {!isSuccess && !isPending && (
@@ -188,9 +366,24 @@ const Checkout = () => {
                   O pagamento não foi concluído. Você pode tentar novamente.
                 </p>
               )}
-              <Link to="/">
-                <Button variant="outline" className="w-full"><ArrowLeft className="mr-2 h-4 w-4" /> Voltar à loja</Button>
-              </Link>
+              <div className="flex gap-2">
+                <Link to="/" className="flex-1">
+                  <Button variant="outline" className="w-full">
+                    <ArrowLeft className="mr-2 h-4 w-4" /> Voltar à loja
+                  </Button>
+                </Link>
+                {!isSuccess && !isPending && (
+                  <Button
+                    className="flex-1"
+                    onClick={() => {
+                      setPaymentResult(null);
+                      setShowBrick(true);
+                    }}
+                  >
+                    Tentar novamente
+                  </Button>
+                )}
+              </div>
             </CardContent>
           </Card>
         </main>
@@ -319,6 +512,43 @@ const Checkout = () => {
                 </CardContent>
               </Card>
             </motion.div>
+
+            {showBrick && (
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <CreditCard className="h-5 w-5 text-primary" />
+                      Pagamento Seguro
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    {brickLoading && (
+                      <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Carregando formulário de pagamento...
+                      </div>
+                    )}
+                    {brickError && (
+                      <div className="text-center py-6 space-y-3">
+                        <p className="text-destructive text-sm">{brickError}</p>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
+                            setBrickError(null);
+                            setShowBrick(false);
+                            setTimeout(() => setShowBrick(true), 50);
+                          }}
+                        >
+                          Recarregar
+                        </Button>
+                      </div>
+                    )}
+                    <div id="mp-payment-brick" />
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
           </div>
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
@@ -367,24 +597,21 @@ const Checkout = () => {
                   <span className="text-xl font-bold text-primary">R$ {totalPrice.toFixed(2).replace(".", ",")}</span>
                 </div>
 
-                <div className="space-y-2">
-                  <Button
-                    onClick={goToPayment}
-                    size="lg"
-                    className="w-full rounded-xl"
-                    disabled={isRedirecting || !!paymentRequirementsMessage}
-                  >
-                    {isRedirecting ? (
-                      <><Loader2 className="h-5 w-5 mr-2 animate-spin" /> Redirecionando...</>
-                    ) : (
-                      <><CreditCard className="h-5 w-5 mr-2" /> Pagar com Mercado Pago</>
-                    )}
-                  </Button>
-
-                  <p className="text-xs text-center min-h-4 text-muted-foreground">
-                    {paymentRequirementsMessage ?? "Você será redirecionado ao site do Mercado Pago. Aceita Pix, cartão de crédito, débito e boleto."}
-                  </p>
-                </div>
+                {!showBrick && (
+                  <div className="space-y-2">
+                    <Button
+                      onClick={startPayment}
+                      size="lg"
+                      className="w-full rounded-xl"
+                      disabled={!!paymentRequirementsMessage}
+                    >
+                      <CreditCard className="h-5 w-5 mr-2" /> Ir para Pagamento
+                    </Button>
+                    <p className="text-xs text-center min-h-4 text-muted-foreground">
+                      {paymentRequirementsMessage ?? "Pagamento direto no site. Aceita Pix, cartão de crédito, débito e boleto."}
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </motion.div>
