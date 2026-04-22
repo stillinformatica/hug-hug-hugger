@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useCartStore } from "@/stores/cartStore";
 import { StoreHeader } from "@/components/store/StoreHeader";
 import { StoreFooter } from "@/components/store/StoreFooter";
@@ -46,6 +46,46 @@ type PaymentResult = {
   qr_code_base64?: string;
   ticket_url?: string;
   boleto_url?: string;
+};
+
+const BRICK_INIT_FAILURE_MESSAGE = "O formulário do Mercado Pago não foi liberado para esta aplicação ou domínio. Você pode continuar pelo checkout seguro do Mercado Pago enquanto ajusta a configuração da aplicação.";
+
+const normalizeMpErrorMessage = (error: unknown) => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === "string") return error;
+  if (error && typeof error === "object") {
+    const maybeMessage = [
+      (error as { message?: string }).message,
+      (error as { error?: string }).error,
+      (error as { cause?: { message?: string } }).cause?.message,
+    ].find((value) => typeof value === "string" && value.trim().length > 0);
+
+    if (maybeMessage) return maybeMessage;
+
+    try {
+      return JSON.stringify(error);
+    } catch {
+      return "Erro desconhecido ao carregar o pagamento";
+    }
+  }
+
+  return "Erro desconhecido ao carregar o pagamento";
+};
+
+const getBrickErrorMessage = (error: unknown) => {
+  const message = normalizeMpErrorMessage(error);
+  const lowerMessage = message.toLowerCase();
+
+  if (
+    lowerMessage.includes("bricks component initialization failed") ||
+    lowerMessage.includes("payment_methods/search") ||
+    lowerMessage.includes("404") ||
+    lowerMessage.includes("403")
+  ) {
+    return BRICK_INIT_FAILURE_MESSAGE;
+  }
+
+  return message;
 };
 
 const SDK_URL = "https://sdk.mercadopago.com/js/v2";
@@ -130,6 +170,7 @@ const loadMpSdk = (() => {
 
 const Checkout = () => {
   const { items, clearCart } = useCartStore();
+  const location = useLocation();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [cep, setCep] = useState("");
@@ -147,6 +188,7 @@ const Checkout = () => {
   const [showBrick, setShowBrick] = useState(false);
   const [brickLoading, setBrickLoading] = useState(false);
   const [brickError, setBrickError] = useState<string | null>(null);
+  const [redirectCheckoutLoading, setRedirectCheckoutLoading] = useState(false);
   const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null);
 
   const brickControllerRef = useRef<any>(null);
@@ -223,6 +265,29 @@ const Checkout = () => {
     };
   }, [customerName, customerEmail, customerPhone, addressInfo, addressNumber, addressComplement, cep, items, totalPrice]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const paymentStatus = params.get("payment");
+    const referenceId = params.get("ref") || params.get("external_reference") || "";
+
+    if (!paymentStatus) return;
+
+    if (paymentStatus === "success") {
+      setPaymentResult({ status: "approved", reference_id: referenceId || "pedido" });
+      clearCart();
+      return;
+    }
+
+    if (paymentStatus === "pending") {
+      setPaymentResult({ status: "pending", reference_id: referenceId || "pedido" });
+      return;
+    }
+
+    if (paymentStatus === "failure") {
+      setPaymentResult({ status: "rejected", reference_id: referenceId || "pedido" });
+    }
+  }, [location.search, clearCart]);
+
   const startPayment = () => {
     if (paymentRequirementsMessage) {
       toast.error("Dados incompletos", { description: paymentRequirementsMessage });
@@ -230,6 +295,49 @@ const Checkout = () => {
     }
     setBrickError(null);
     setShowBrick(true);
+  };
+
+  const handleRedirectCheckout = async () => {
+    if (paymentRequirementsMessage) {
+      toast.error("Dados incompletos", { description: paymentRequirementsMessage });
+      return;
+    }
+
+    const ctx = checkoutDataRef.current;
+    setRedirectCheckoutLoading(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("mercadopago-create-preference", {
+        body: {
+          items: items.map((item) => ({
+            name: item.name,
+            quantity: item.quantity,
+            unit_amount: item.price,
+            reference_id: item.productId,
+            image: item.image,
+          })),
+          customer: ctx.customer,
+          shipping: ctx.shipping,
+          shippingCost: shippingPrice,
+        },
+      });
+
+      if (error) throw error;
+
+      const paymentUrl = data?.sandbox_init_point || data?.init_point || data?.payment_url;
+      if (!paymentUrl) {
+        throw new Error("Não foi possível gerar o checkout do Mercado Pago.");
+      }
+
+      window.location.href = paymentUrl;
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao abrir checkout do Mercado Pago", {
+        description: err instanceof Error ? err.message : "Tente novamente em instantes",
+      });
+    } finally {
+      setRedirectCheckoutLoading(false);
+    }
   };
 
   // Inicializa o Payment Brick quando o usuário clica em "Pagar"
@@ -347,28 +455,27 @@ const Checkout = () => {
               onError: (error: any) => {
                 console.error("Brick error:", error);
                 setBrickLoading(false);
-                setBrickError("Erro no formulário de pagamento. Recarregue a página.");
+                setBrickError(getBrickErrorMessage(error));
               },
             },
           }),
           new Promise<never>((_, reject) => {
             window.setTimeout(() => {
               if (!readyResolved) {
-                reject(new Error("O formulário de pagamento não respondeu a tempo"));
+                reject(new Error(BRICK_INIT_FAILURE_MESSAGE));
               }
             }, BRICK_LOAD_TIMEOUT_MS);
           }),
         ]);
 
         brickControllerRef.current = controller;
-        // Garante que o loader some assim que o controller existe (caso onReady atrase)
         window.setTimeout(() => {
           if (!cancelled) setBrickLoading(false);
         }, 1500);
       } catch (err) {
         console.error(err);
         if (!cancelled) {
-          setBrickError(err instanceof Error ? err.message : "Não foi possível carregar o pagamento");
+          setBrickError(getBrickErrorMessage(err));
           setBrickLoading(false);
         }
       }
@@ -629,17 +736,26 @@ const Checkout = () => {
                     {brickError && (
                       <div className="text-center py-6 space-y-3">
                         <p className="text-destructive text-sm whitespace-pre-wrap break-words">{brickError}</p>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setBrickError(null);
-                            setBrickLoading(false);
-                            setShowBrick(false);
-                            setTimeout(() => setShowBrick(true), 50);
-                          }}
-                        >
-                          Recarregar
-                        </Button>
+                        <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setBrickError(null);
+                              setBrickLoading(false);
+                              setShowBrick(false);
+                              setTimeout(() => setShowBrick(true), 50);
+                            }}
+                          >
+                            Recarregar
+                          </Button>
+                          <Button
+                            onClick={handleRedirectCheckout}
+                            disabled={redirectCheckoutLoading}
+                          >
+                            {redirectCheckoutLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            Abrir checkout do Mercado Pago
+                          </Button>
+                        </div>
                       </div>
                     )}
                     <div id="mp-payment-brick" />
