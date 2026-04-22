@@ -297,6 +297,49 @@ const Checkout = () => {
     setShowBrick(true);
   };
 
+  const handleRedirectCheckout = async () => {
+    if (paymentRequirementsMessage) {
+      toast.error("Dados incompletos", { description: paymentRequirementsMessage });
+      return;
+    }
+
+    const ctx = checkoutDataRef.current;
+    setRedirectCheckoutLoading(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("mercadopago-create-preference", {
+        body: {
+          items: items.map((item) => ({
+            name: item.name,
+            quantity: item.quantity,
+            unit_amount: item.price,
+            reference_id: item.productId,
+            image: item.image,
+          })),
+          customer: ctx.customer,
+          shipping: ctx.shipping,
+          shippingCost: shippingPrice,
+        },
+      });
+
+      if (error) throw error;
+
+      const paymentUrl = data?.sandbox_init_point || data?.init_point || data?.payment_url;
+      if (!paymentUrl) {
+        throw new Error("Não foi possível gerar o checkout do Mercado Pago.");
+      }
+
+      window.location.href = paymentUrl;
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao abrir checkout do Mercado Pago", {
+        description: err instanceof Error ? err.message : "Tente novamente em instantes",
+      });
+    } finally {
+      setRedirectCheckoutLoading(false);
+    }
+  };
+
   // Inicializa o Payment Brick quando o usuário clica em "Pagar"
   useEffect(() => {
     if (!showBrick) return;
@@ -693,17 +736,26 @@ const Checkout = () => {
                     {brickError && (
                       <div className="text-center py-6 space-y-3">
                         <p className="text-destructive text-sm whitespace-pre-wrap break-words">{brickError}</p>
-                        <Button
-                          variant="outline"
-                          onClick={() => {
-                            setBrickError(null);
-                            setBrickLoading(false);
-                            setShowBrick(false);
-                            setTimeout(() => setShowBrick(true), 50);
-                          }}
-                        >
-                          Recarregar
-                        </Button>
+                        <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              setBrickError(null);
+                              setBrickLoading(false);
+                              setShowBrick(false);
+                              setTimeout(() => setShowBrick(true), 50);
+                            }}
+                          >
+                            Recarregar
+                          </Button>
+                          <Button
+                            onClick={handleRedirectCheckout}
+                            disabled={redirectCheckoutLoading}
+                          >
+                            {redirectCheckoutLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                            Abrir checkout do Mercado Pago
+                          </Button>
+                        </div>
                       </div>
                     )}
                     <div id="mp-payment-brick" />
