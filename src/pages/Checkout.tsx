@@ -240,20 +240,39 @@ const Checkout = () => {
     const init = async () => {
       setBrickLoading(true);
       try {
+        // Validações que travam o Brick silenciosamente
+        if (!customerEmail || !/^\S+@\S+\.\S+$/.test(customerEmail)) {
+          throw new Error("E-mail inválido. Volte e preencha um e-mail válido.");
+        }
+        if (!totalPrice || totalPrice <= 0) {
+          throw new Error("Valor do pedido inválido.");
+        }
+
+        console.log("[MP Brick] Iniciando. amount=", totalPrice, "email=", customerEmail);
         await loadMpSdk();
+        console.log("[MP Brick] SDK carregado");
+
         const { data: keyData, error: keyErr } = await supabase.functions.invoke("mercadopago-public-key");
         if (keyErr) throw keyErr;
         const publicKey = keyData?.public_key;
         if (!publicKey) throw new Error("Chave pública do Mercado Pago não configurada");
+        console.log("[MP Brick] Public key OK");
 
         if (cancelled) return;
 
+        // Aguarda o container existir no DOM (React pode não ter commitado ainda)
+        let container: HTMLElement | null = null;
+        for (let i = 0; i < 50; i++) {
+          container = document.getElementById("mp-payment-brick");
+          if (container) break;
+          await new Promise((r) => setTimeout(r, 50));
+        }
+        if (!container) throw new Error("Container do pagamento não encontrado");
+        container.innerHTML = "";
+        console.log("[MP Brick] Container pronto");
+
         const mp = new (window as any).MercadoPago(publicKey, { locale: "pt-BR" });
         const bricksBuilder = mp.bricks();
-
-        // Garante container limpo
-        const container = document.getElementById("mp-payment-brick");
-        if (container) container.innerHTML = "";
 
         let readyResolved = false;
         const controller = await Promise.race([
