@@ -275,6 +275,13 @@ const Checkout = () => {
         const bricksBuilder = mp.bricks();
 
         let readyResolved = false;
+        // Fallback: se onReady não disparar em 4s mas o container já tem conteúdo, esconde o loader
+        const readyFallback = window.setTimeout(() => {
+          if (!readyResolved && container && container.children.length > 0) {
+            readyResolved = true;
+            setBrickLoading(false);
+          }
+        }, 4000);
         const controller = await Promise.race([
           bricksBuilder.create("payment", "mp-payment-brick", {
             initialization: {
@@ -294,6 +301,7 @@ const Checkout = () => {
             callbacks: {
               onReady: () => {
                 readyResolved = true;
+                window.clearTimeout(readyFallback);
                 setBrickLoading(false);
               },
               onSubmit: async ({ formData }: { formData: any }) => {
@@ -353,6 +361,10 @@ const Checkout = () => {
         ]);
 
         brickControllerRef.current = controller;
+        // Garante que o loader some assim que o controller existe (caso onReady atrase)
+        window.setTimeout(() => {
+          if (!cancelled) setBrickLoading(false);
+        }, 1500);
       } catch (err) {
         console.error(err);
         if (!cancelled) {
