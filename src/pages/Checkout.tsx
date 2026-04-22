@@ -49,27 +49,81 @@ type PaymentResult = {
 };
 
 const SDK_URL = "https://sdk.mercadopago.com/js/v2";
+const SDK_LOAD_TIMEOUT_MS = 15000;
+const BRICK_LOAD_TIMEOUT_MS = 20000;
 
 const loadMpSdk = (() => {
   let promise: Promise<void> | null = null;
-  return () => {
-    if (promise) return promise;
-    promise = new Promise<void>((resolve, reject) => {
-      if (typeof window === "undefined") return reject(new Error("window indisponível"));
-      if ((window as any).MercadoPago) return resolve();
-      const existing = document.querySelector<HTMLScriptElement>(`script[src="${SDK_URL}"]`);
-      if (existing) {
-        existing.addEventListener("load", () => resolve());
-        existing.addEventListener("error", () => reject(new Error("Falha ao carregar SDK")));
+
+  const waitForMercadoPago = (timeoutMs: number) => new Promise<void>((resolve, reject) => {
+    const startedAt = Date.now();
+
+    const check = () => {
+      if ((window as any).MercadoPago) {
+        resolve();
         return;
       }
+
+      if (Date.now() - startedAt >= timeoutMs) {
+        reject(new Error("O formulário de pagamento demorou para carregar"));
+        return;
+      }
+
+      window.setTimeout(check, 100);
+    };
+
+    check();
+  });
+
+  return () => {
+    if (promise) return promise;
+
+    promise = new Promise<void>((resolve, reject) => {
+      if (typeof window === "undefined") {
+        reject(new Error("window indisponível"));
+        return;
+      }
+
+      if ((window as any).MercadoPago) {
+        resolve();
+        return;
+      }
+
+      const existing = document.querySelector<HTMLScriptElement>(`script[src="${SDK_URL}"]`);
+
+      const finish = () => {
+        waitForMercadoPago(SDK_LOAD_TIMEOUT_MS).then(resolve).catch(reject);
+      };
+
+      if (existing) {
+        if (existing.dataset.loaded === "true") {
+          finish();
+          return;
+        }
+
+        existing.addEventListener("load", () => {
+          existing.dataset.loaded = "true";
+          finish();
+        }, { once: true });
+        existing.addEventListener("error", () => reject(new Error("Falha ao carregar SDK Mercado Pago")), { once: true });
+        window.setTimeout(finish, 300);
+        return;
+      }
+
       const script = document.createElement("script");
       script.src = SDK_URL;
       script.async = true;
-      script.onload = () => resolve();
+      script.onload = () => {
+        script.dataset.loaded = "true";
+        finish();
+      };
       script.onerror = () => reject(new Error("Falha ao carregar SDK Mercado Pago"));
       document.head.appendChild(script);
+    }).catch((error) => {
+      promise = null;
+      throw error;
     });
+
     return promise;
   };
 })();
@@ -201,71 +255,83 @@ const Checkout = () => {
         const container = document.getElementById("mp-payment-brick");
         if (container) container.innerHTML = "";
 
-        const controller = await bricksBuilder.create("payment", "mp-payment-brick", {
-          initialization: {
-            amount: Number(totalPrice.toFixed(2)),
-            payer: { email: customerEmail },
-          },
-          customization: {
-            paymentMethods: {
-              creditCard: "all",
-              debitCard: "all",
-              bankTransfer: "all", // PIX
-              ticket: "all",       // Boleto
-              maxInstallments: 12,
+        let readyResolved = false;
+        const controller = await Promise.race([
+          bricksBuilder.create("payment", "mp-payment-brick", {
+            initialization: {
+              amount: Number(totalPrice.toFixed(2)),
+              payer: { email: customerEmail },
             },
-            visual: { style: { theme: "default" } },
-          },
-          callbacks: {
-            onReady: () => {
-              setBrickLoading(false);
+            customization: {
+              paymentMethods: {
+                creditCard: "all",
+                debitCard: "all",
+                bankTransfer: "all",
+                ticket: "all",
+                maxInstallments: 12,
+              },
+              visual: { style: { theme: "default" } },
             },
-            onSubmit: async ({ formData }: { formData: any }) => {
-              const ctx = checkoutDataRef.current;
-              try {
-                const { data, error } = await supabase.functions.invoke("mercadopago-process-payment", {
-                  body: {
-                    formData,
-                    items: ctx.items,
-                    customer: ctx.customer,
-                    shipping: ctx.shipping,
-                    totalAmount: ctx.totalAmount,
-                  },
-                });
-                if (error) throw error;
-                if (data?.error) throw new Error(data.error);
+            callbacks: {
+              onReady: () => {
+                readyResolved = true;
+                setBrickLoading(false);
+              },
+              onSubmit: async ({ formData }: { formData: any }) => {
+                const ctx = checkoutDataRef.current;
+                try {
+                  const { data, error } = await supabase.functions.invoke("mercadopago-process-payment", {
+                    body: {
+                      formData,
+                      items: ctx.items,
+                      customer: ctx.customer,
+                      shipping: ctx.shipping,
+                      totalAmount: ctx.totalAmount,
+                    },
+                  });
+                  if (error) throw error;
+                  if (data?.error) throw new Error(data.error);
 
-                const status = data.status as PaymentResult["status"];
-                setPaymentResult({
-                  status,
-                  reference_id: data.reference_id,
-                  qr_code: data.qr_code,
-                  qr_code_base64: data.qr_code_base64,
-                  ticket_url: data.ticket_url,
-                  boleto_url: data.boleto_url,
-                });
-                if (status === "approved") {
-                  clearCart();
-                  toast.success("Pagamento aprovado!");
-                } else if (status === "pending" || status === "in_process") {
-                  toast.info("Pagamento em processamento");
-                } else {
-                  toast.error("Pagamento não aprovado");
+                  const status = data.status as PaymentResult["status"];
+                  setPaymentResult({
+                    status,
+                    reference_id: data.reference_id,
+                    qr_code: data.qr_code,
+                    qr_code_base64: data.qr_code_base64,
+                    ticket_url: data.ticket_url,
+                    boleto_url: data.boleto_url,
+                  });
+                  if (status === "approved") {
+                    clearCart();
+                    toast.success("Pagamento aprovado!");
+                  } else if (status === "pending" || status === "in_process") {
+                    toast.info("Pagamento em processamento");
+                  } else {
+                    toast.error("Pagamento não aprovado");
+                  }
+                } catch (err) {
+                  console.error(err);
+                  toast.error("Erro ao processar pagamento", {
+                    description: err instanceof Error ? err.message : "Tente novamente",
+                  });
+                  throw err;
                 }
-              } catch (err) {
-                console.error(err);
-                toast.error("Erro ao processar pagamento", {
-                  description: err instanceof Error ? err.message : "Tente novamente",
-                });
-                throw err;
+              },
+              onError: (error: any) => {
+                console.error("Brick error:", error);
+                setBrickLoading(false);
+                setBrickError("Erro no formulário de pagamento. Recarregue a página.");
+              },
+            },
+          }),
+          new Promise<never>((_, reject) => {
+            window.setTimeout(() => {
+              if (!readyResolved) {
+                reject(new Error("O formulário de pagamento não respondeu a tempo"));
               }
-            },
-            onError: (error: any) => {
-              console.error("Brick error:", error);
-              setBrickError("Erro no formulário de pagamento. Recarregue a página.");
-            },
-          },
-        });
+            }, BRICK_LOAD_TIMEOUT_MS);
+          }),
+        ]);
 
         brickControllerRef.current = controller;
       } catch (err) {
