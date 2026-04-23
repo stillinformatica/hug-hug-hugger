@@ -82,6 +82,9 @@ const getBrickErrorMessage = (error: unknown) => {
     lowerMessage.includes("404") ||
     lowerMessage.includes("403")
   ) {
+    if (lowerMessage.includes("404") || lowerMessage.includes("payment_methods")) {
+      return "Erro de credenciais no Mercado Pago (404). Por favor, verifique se o Public Key está correto e se a conta está ativa.";
+    }
     return BRICK_INIT_FAILURE_MESSAGE;
   }
 
