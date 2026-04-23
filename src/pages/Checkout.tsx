@@ -364,6 +364,13 @@ const Checkout = () => {
         if (keyErr) throw keyErr;
         const publicKey = keyData?.public_key;
         if (!publicKey) throw new Error("Chave pública do Mercado Pago não configurada");
+        
+        // Verifica se a chave pública parece ser um token de acesso (erro comum)
+        if (publicKey.length > 60 && publicKey.startsWith("APP_USR-")) {
+          console.error("[MP Brick] A chave pública parece ser um Token de Acesso. Verifique as configurações.");
+          throw new Error("A chave pública configurada parece ser um Token de Acesso. Por favor, verifique se você não inverteu o Public Key e o Access Token nas configurações.");
+        }
+        
         console.log("[MP Brick] Public key OK");
 
         if (cancelled) return;
