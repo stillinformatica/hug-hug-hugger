@@ -144,7 +144,7 @@ const ProductsManager = () => {
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label>Nome do Produto *</Label>
-                  <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Ex: Monitor Gamer 24\"" />
+                  <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Ex: Monitor Gamer 24" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
