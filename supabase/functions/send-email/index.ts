@@ -32,7 +32,7 @@ serve(async (req) => {
     const client = new SmtpClient();
 
     await client.connectTLS({
-      hostname: "smtp.zoho.com.br",
+      hostname: "smtp.zoho.com",
       port: 465,
       username: smtpUser,
       password: smtpPass,
