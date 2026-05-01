@@ -136,45 +136,65 @@ const ProductsManager = () => {
       <CardContent className="space-y-6">
         {showForm && (
           <div className="p-4 border border-border rounded-xl space-y-4 bg-secondary/30">
-            <h3 className="font-semibold text-foreground">{editingId ? "Editar Produto" : "Novo Produto"}</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Nome *</Label>
-                <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Nome do produto" />
-              </div>
-              <div className="space-y-2">
-                <Label>Preço *</Label>
-                <Input type="number" step="0.01" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="99.90" />
-              </div>
-              <div className="space-y-2">
-                <Label>Categoria</Label>
-                <Input value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} placeholder="Eletrônicos" />
-              </div>
-              <div className="space-y-2">
-                <Label>URL da Imagem</Label>
-                <Input value={form.imageUrl} onChange={e => setForm(f => ({ ...f, imageUrl: e.target.value }))} placeholder="https://..." />
-              </div>
-              <div className="space-y-2">
-                <Label>Peso (kg)</Label>
-                <Input type="number" step="0.001" value={form.weight} onChange={e => setForm(f => ({ ...f, weight: e.target.value }))} placeholder="0.5" />
-              </div>
-              <div className="grid grid-cols-3 gap-2">
+            <div className="flex items-center gap-2 mb-2">
+              <Package className="h-5 w-5 text-primary" />
+              <h3 className="font-semibold text-foreground">{editingId ? "Editar Produto" : "Novo Produto"}</h3>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Alt (cm)</Label>
-                  <Input type="number" value={form.height} onChange={e => setForm(f => ({ ...f, height: e.target.value }))} placeholder="10" />
+                  <Label>Nome do Produto *</Label>
+                  <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Ex: Monitor Gamer 24\"" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Preço (R$) *</Label>
+                    <Input type="number" step="0.01" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="0,00" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Categoria</Label>
+                    <Input value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} placeholder="Eletrônicos" />
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label>Larg (cm)</Label>
-                  <Input type="number" value={form.width} onChange={e => setForm(f => ({ ...f, width: e.target.value }))} placeholder="15" />
+                  <Label>URL da Imagem</Label>
+                  <Input value={form.imageUrl} onChange={e => setForm(f => ({ ...f, imageUrl: e.target.value }))} placeholder="https://link-da-imagem.com/foto.jpg" />
                 </div>
                 <div className="space-y-2">
-                  <Label>Comp (cm)</Label>
-                  <Input type="number" value={form.length} onChange={e => setForm(f => ({ ...f, length: e.target.value }))} placeholder="15" />
+                  <Label>Descrição</Label>
+                  <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Detalhes técnicos e estado do produto" className="h-32" />
                 </div>
               </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label>Descrição</Label>
-                <Textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Descrição do produto" />
+
+              <div className="space-y-4 p-4 bg-primary/5 border border-primary/10 rounded-lg">
+                <h4 className="text-sm font-bold flex items-center gap-2 text-primary">
+                  <Package className="h-4 w-4" /> 
+                  Informações de Envio (Total Express)
+                </h4>
+                <div className="space-y-2">
+                  <Label className="text-xs uppercase text-muted-foreground">Peso Total (kg)</Label>
+                  <Input type="number" step="0.001" value={form.weight} onChange={e => setForm(f => ({ ...f, weight: e.target.value }))} placeholder="0.500" />
+                  <p className="text-[10px] text-muted-foreground">Peso do produto + embalagem</p>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase text-muted-foreground">Altura (cm)</Label>
+                    <Input type="number" value={form.height} onChange={e => setForm(f => ({ ...f, height: e.target.value }))} placeholder="10" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase text-muted-foreground">Largura (cm)</Label>
+                    <Input type="number" value={form.width} onChange={e => setForm(f => ({ ...f, width: e.target.value }))} placeholder="15" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase text-muted-foreground">Compr. (cm)</Label>
+                    <Input type="number" value={form.length} onChange={e => setForm(f => ({ ...f, length: e.target.value }))} placeholder="15" />
+                  </div>
+                </div>
+                <div className="bg-white/50 p-2 rounded border border-dashed border-primary/20">
+                  <p className="text-[11px] leading-relaxed text-muted-foreground italic">
+                    * Essas dimensões são usadas para calcular o frete em tempo real no checkout via Total Express.
+                  </p>
+                </div>
               </div>
             </div>
             <div className="flex gap-2">
