@@ -206,7 +206,15 @@ const ProductsManager = () => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-foreground text-sm truncate">{p.name}</p>
-                  <p className="text-xs text-muted-foreground">{p.category || "Sem categoria"} • R$ {Number(p.price).toFixed(2).replace(".", ",")}</p>
+                  <div className="flex flex-wrap gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                    <span>{p.category || "Sem categoria"}</span>
+                    <span>•</span>
+                    <span className="font-semibold text-primary">R$ {Number(p.price).toFixed(2).replace(".", ",")}</span>
+                    <span>•</span>
+                    <span className="bg-secondary/50 px-1 rounded">{p.weight || 0.5}kg</span>
+                    <span>•</span>
+                    <span>{p.height || 10}x{p.width || 15}x{p.length || 15}cm</span>
+                  </div>
                 </div>
                 <div className="flex gap-1">
                   <Button variant="ghost" size="icon" onClick={() => handleEdit(p)}>
