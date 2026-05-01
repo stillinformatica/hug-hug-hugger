@@ -14,10 +14,15 @@ const ProductSchema = z.object({
   price: z.union([z.string(), z.number()]).transform((v) => Number(v)),
   quantity: z.number().default(0),
   images: z.array(z.string()).default([]),
-  weight: z.number().optional().default(0.5),
-  height: z.number().optional().default(10),
-  width: z.number().optional().default(15),
-  length: z.number().optional().default(15),
+  // Accept both English and Portuguese names
+  weight: z.number().optional(),
+  peso: z.number().optional(),
+  height: z.number().optional(),
+  altura: z.number().optional(),
+  width: z.number().optional(),
+  largura: z.number().optional(),
+  length: z.number().optional(),
+  comprimento: z.number().optional(),
   isTesting: z.boolean().default(false),
   upsert: z.boolean().default(false),
 });
@@ -28,15 +33,26 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const parsed = ProductSchema.safeParse(await req.json());
+    const rawBody = await req.json();
+    console.log("Receiving product sync request:", JSON.stringify(rawBody));
+    
+    const parsed = ProductSchema.safeParse(rawBody);
     if (!parsed.success) {
+      console.error("Validation error:", parsed.error);
       return new Response(
         JSON.stringify({ error: "Dados inválidos", details: parsed.error.flatten().fieldErrors }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const { source_id, name, description, category, price, quantity, images, weight, height, width, length, isTesting, upsert } = parsed.data;
+    const data = parsed.data;
+    const { source_id, name, description, category, price, quantity, images, upsert } = data;
+
+    // Resolve weight and dimensions from multiple possible field names
+    const weight = data.weight ?? data.peso ?? 0.5;
+    const height = data.height ?? data.altura ?? 10;
+    const width = data.width ?? data.largura ?? 15;
+    const length = data.length ?? data.comprimento ?? 15;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -45,20 +61,20 @@ Deno.serve(async (req) => {
     // Match by source_id first, then fallback to name
     let existing = null;
     if (source_id) {
-      const { data } = await supabase
+      const { data: res } = await supabase
         .from("announced_products")
         .select("id")
         .eq("source_id", source_id)
         .maybeSingle();
-      existing = data;
+      existing = res;
     }
     if (!existing) {
-      const { data } = await supabase
+      const { data: res } = await supabase
         .from("announced_products")
         .select("id")
         .eq("name", name)
         .maybeSingle();
-      existing = data;
+      existing = res;
     }
 
     let action = "created";
@@ -93,7 +109,7 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, action }),
+      JSON.stringify({ success: true, action, received_dimensions: { weight, height, width, length } }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
