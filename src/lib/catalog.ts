@@ -5,6 +5,10 @@ export interface CatalogProduct {
   category: string | null;
   price: number;
   images: string[];
+  weight?: number;
+  height?: number;
+  width?: number;
+  length?: number;
   created_at: string;
 }
 
