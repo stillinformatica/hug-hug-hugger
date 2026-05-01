@@ -80,7 +80,7 @@ function toStringArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === "string" && item.length > 0);
 }
 
-export function normalizeProduct(product: ProductInput | null | undefined): CatalogProduct {
+export function normalizeProduct(product: any | null | undefined): CatalogProduct {
   return {
     id: product?.id || crypto.randomUUID(),
     name: product?.name || "Produto sem nome",
@@ -88,6 +88,10 @@ export function normalizeProduct(product: ProductInput | null | undefined): Cata
     category: product?.category ?? null,
     price: Number(product?.price ?? 0),
     images: toStringArray(product?.images),
+    weight: product?.weight ? Number(product.weight) : undefined,
+    height: product?.height ? Number(product.height) : undefined,
+    width: product?.width ? Number(product.width) : undefined,
+    length: product?.length ? Number(product.length) : undefined,
     created_at: product?.created_at || new Date().toISOString(),
   };
 }
