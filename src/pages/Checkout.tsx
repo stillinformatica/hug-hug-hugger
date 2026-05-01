@@ -222,7 +222,15 @@ const Checkout = () => {
       const { data, error } = await supabase.functions.invoke("calculate-shipping", {
         body: {
           postal_code: cep,
-          items: items.map((i) => ({ name: i.name, quantity: i.quantity })),
+          items: items.map((i) => ({ 
+            name: i.name, 
+            quantity: i.quantity,
+            price: i.price,
+            weight: (i as any).weight,
+            width: (i as any).width,
+            height: (i as any).height,
+            length: (i as any).length,
+          })),
         },
       });
 
