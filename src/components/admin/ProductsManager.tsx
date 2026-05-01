@@ -15,9 +15,23 @@ interface ProductForm {
   category: string;
   price: string;
   imageUrl: string;
+  weight: string;
+  height: string;
+  width: string;
+  length: string;
 }
 
-const emptyForm: ProductForm = { name: "", description: "", category: "", price: "", imageUrl: "" };
+const emptyForm: ProductForm = { 
+  name: "", 
+  description: "", 
+  category: "", 
+  price: "", 
+  imageUrl: "",
+  weight: "0.5",
+  height: "10",
+  width: "15",
+  length: "15"
+};
 
 const ProductsManager = () => {
   const [products, setProducts] = useState<Product[]>([]);
@@ -48,6 +62,10 @@ const ProductsManager = () => {
       category: p.category || "",
       price: String(p.price),
       imageUrl: p.images?.[0] || "",
+      weight: String(p.weight || "0.5"),
+      height: String(p.height || "10"),
+      width: String(p.width || "15"),
+      length: String(p.length || "15"),
     });
     setEditingId(p.id);
     setShowForm(true);
@@ -63,6 +81,10 @@ const ProductsManager = () => {
       category: form.category || null,
       price: parseFloat(form.price),
       images: images as any,
+      weight: parseFloat(form.weight) || 0.5,
+      height: parseFloat(form.height) || 10,
+      width: parseFloat(form.width) || 15,
+      length: parseFloat(form.length) || 15,
     };
 
     if (editingId) {
@@ -131,6 +153,24 @@ const ProductsManager = () => {
               <div className="space-y-2">
                 <Label>URL da Imagem</Label>
                 <Input value={form.imageUrl} onChange={e => setForm(f => ({ ...f, imageUrl: e.target.value }))} placeholder="https://..." />
+              </div>
+              <div className="space-y-2">
+                <Label>Peso (kg)</Label>
+                <Input type="number" step="0.001" value={form.weight} onChange={e => setForm(f => ({ ...f, weight: e.target.value }))} placeholder="0.5" />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                <div className="space-y-2">
+                  <Label>Alt (cm)</Label>
+                  <Input type="number" value={form.height} onChange={e => setForm(f => ({ ...f, height: e.target.value }))} placeholder="10" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Larg (cm)</Label>
+                  <Input type="number" value={form.width} onChange={e => setForm(f => ({ ...f, width: e.target.value }))} placeholder="15" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Comp (cm)</Label>
+                  <Input type="number" value={form.length} onChange={e => setForm(f => ({ ...f, length: e.target.value }))} placeholder="15" />
+                </div>
               </div>
               <div className="space-y-2 md:col-span-2">
                 <Label>Descrição</Label>
