@@ -6,8 +6,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2, Save, Plus, Trash2, ImageIcon, Pencil, X } from "lucide-react";
-import type { Product } from "@/hooks/useProducts";
+import { Loader2, Save, Plus, Trash2, ImageIcon, Pencil, X, Package } from "lucide-react";
+import type { CatalogProduct as Product } from "@/lib/catalog";
 
 interface ProductForm {
   name: string;
