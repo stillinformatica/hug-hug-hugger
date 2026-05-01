@@ -46,31 +46,43 @@ export type Database = {
           category: string | null
           created_at: string
           description: string | null
+          height: number | null
           id: string
           images: Json | null
+          length: number | null
           name: string
           price: number
           source_id: number | null
+          weight: number | null
+          width: number | null
         }
         Insert: {
           category?: string | null
           created_at?: string
           description?: string | null
+          height?: number | null
           id?: string
           images?: Json | null
+          length?: number | null
           name: string
           price?: number
           source_id?: number | null
+          weight?: number | null
+          width?: number | null
         }
         Update: {
           category?: string | null
           created_at?: string
           description?: string | null
+          height?: number | null
           id?: string
           images?: Json | null
+          length?: number | null
           name?: string
           price?: number
           source_id?: number | null
+          weight?: number | null
+          width?: number | null
         }
         Relationships: []
       }
