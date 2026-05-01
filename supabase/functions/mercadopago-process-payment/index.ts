@@ -106,7 +106,35 @@ serve(async (req) => {
         shipping_address: shipping || null,
         notification_data: data,
       });
-      if (dbError) console.error("Erro ao salvar pedido:", dbError);
+      if (dbError) {
+        console.error("Erro ao salvar pedido:", dbError);
+      } else {
+        // Enviar e-mail de "Pedido Recebido" (Aguardando Pagamento)
+        try {
+          console.log("Enviando e-mail de pedido recebido para:", customer?.email);
+          await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            },
+            body: JSON.stringify({
+              to: customer?.email,
+              subject: `Pedido Recebido! #${referenceId} - Still Informatica`,
+              html: `
+                <h1>Olá, ${customer?.name || 'Cliente'}!</h1>
+                <p>Recebemos o seu pedido <strong>${referenceId}</strong>.</p>
+                <p>Status atual: <strong>Aguardando Pagamento</strong>.</p>
+                <p>Assim que o pagamento for confirmado, iniciaremos o processo de separação e envio.</p>
+                <br>
+                <p>Atenciosamente,<br>Equipe Still Informatica</p>
+              `,
+            }),
+          });
+        } catch (mailError) {
+          console.error("Erro ao enviar e-mail de pedido recebido:", mailError);
+        }
+      }
     }
 
     return new Response(
