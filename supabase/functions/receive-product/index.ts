@@ -14,6 +14,10 @@ const ProductSchema = z.object({
   price: z.union([z.string(), z.number()]).transform((v) => Number(v)),
   quantity: z.number().default(0),
   images: z.array(z.string()).default([]),
+  weight: z.number().optional().default(0.5),
+  height: z.number().optional().default(10),
+  width: z.number().optional().default(15),
+  length: z.number().optional().default(15),
   isTesting: z.boolean().default(false),
   upsert: z.boolean().default(false),
 });
@@ -32,7 +36,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { source_id, name, description, category, price, quantity, images, isTesting, upsert } = parsed.data;
+    const { source_id, name, description, category, price, quantity, images, weight, height, width, length, isTesting, upsert } = parsed.data;
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -65,6 +69,10 @@ Deno.serve(async (req) => {
       price,
       images,
       source_id: source_id || null,
+      weight,
+      height,
+      width,
+      length,
     };
 
     if (existing && upsert) {
