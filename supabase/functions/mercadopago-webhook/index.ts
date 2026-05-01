@@ -124,6 +124,45 @@ serve(async (req) => {
       console.error("Erro ao atualizar pedido:", error);
     } else {
       console.log("Pedido atualizado:", referenceId, "->", mappedStatus);
+      
+      // Enviar e-mail se o pagamento foi aprovado
+      if (mappedStatus === "PAID") {
+        try {
+          const { data: orderData } = await supabase
+            .from("orders")
+            .select("customer_email, customer_name, total_amount")
+            .eq("reference_id", referenceId)
+            .single();
+
+          if (orderData?.customer_email) {
+            console.log("Enviando e-mail de confirmação para:", orderData.customer_email);
+            const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+            const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+            
+            await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              },
+              body: JSON.stringify({
+                to: orderData.customer_email,
+                subject: "Pagamento Confirmado! - Still Informatica",
+                html: `
+                  <h1>Olá, ${orderData.customer_name || 'Cliente'}!</h1>
+                  <p>Seu pagamento do pedido <strong>${referenceId}</strong> foi confirmado com sucesso.</p>
+                  <p>Valor total: R$ ${orderData.total_amount}</p>
+                  <p>Em breve você receberá as informações de envio.</p>
+                  <br>
+                  <p>Atenciosamente,<br>Equipe Still Informatica</p>
+                `,
+              }),
+            });
+          }
+        } catch (mailError) {
+          console.error("Erro ao disparar e-mail de confirmação:", mailError);
+        }
+      }
     }
 
     return new Response(JSON.stringify({ received: true, status: mappedStatus }), {
