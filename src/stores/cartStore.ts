@@ -8,6 +8,10 @@ export interface CartItem {
   image: string | null;
   price: number;
   quantity: number;
+  weight?: number;
+  height?: number;
+  width?: number;
+  length?: number;
 }
 
 interface CartStore {
@@ -46,6 +50,10 @@ export const useCartStore = create<CartStore>()(
                 image: product.images?.[0] || null,
                 price: product.price,
                 quantity,
+                weight: product.weight,
+                height: product.height,
+                width: product.width,
+                length: product.length,
               },
             ],
           });
