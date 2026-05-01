@@ -1,5 +1,6 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { SmtpClient } from "https://deno.land/x/smtp@v0.7.0/mod.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -28,39 +29,26 @@ serve(async (req) => {
       throw new Error("ZOHO_SMTP_PASSWORD not configured");
     }
 
-    // Usaremos a API do Zoho ou SMTP. Como SMTP direto no Deno pode ser complexo sem libs, 
-    // usaremos um serviço de relay ou tentaremos via fetch se disponível. 
-    // O Zoho permite envio via API REST também (mais estável que SMTP direto em Serverless).
-    // No entanto, para simplificar e garantir funcionamento imediato, vamos usar o SmtpClient do Deno se possível, 
-    // ou uma abordagem via fetch para um gateway SMTP.
-    
-    // Melhor abordagem: Zoho Mail API
-    // https://www.zoho.com/mail/help/api/
-    
-    // Dado que o usuário forneceu uma App Password, ele provavelmente espera SMTP.
-    // Mas Edge Functions preferem HTTP. Vamos tentar usar o pacote 'smtp' compatível com Deno.
-    
-    console.log(`Sending email to ${to} with subject: ${subject}`);
+    const client = new SmtpClient();
 
-    // Nota: Zoho SMTP usa porta 465 (SSL) ou 587 (TLS).
-    // No ambiente Edge, conexões TCP diretas podem ser restritas.
-    // Se falhar, recomendaremos usar a API do Zoho.
-    
-    // Como alternativa robusta, vamos implementar via um serviço de email se o SMTP falhar,
-    // mas por agora vamos tentar a lógica de envio.
-    
-    // IMPORTANTE: Zoho SMTP Host: smtp.zoho.com.br
-    
-    // Para este ambiente, vamos usar uma biblioteca que suporte fetch para SMTP ou similar.
-    // Como não temos uma lib de SMTP pré-instalada que funcione 100% via fetch em Edge sem TCP,
-    // vamos usar o serviço de envio do Lovable/Supabase se disponível, ou configurar a API do Zoho.
-    
-    // VAMOS USAR A API DO ZOHO (HTTPS) que é o padrão para Edge Functions.
-    // Mas o usuário deu App Password (SMTP). 
-    
-    // Vou usar uma abordagem que simula o envio e reporta sucesso/erro para validarmos a conectividade.
-    
-    return new Response(JSON.stringify({ success: true, message: "Email service ready (Mock for connectivity check)" }), {
+    await client.connectTLS({
+      hostname: "smtp.zoho.com.br",
+      port: 465,
+      username: smtpUser,
+      password: smtpPass,
+    });
+
+    await client.send({
+      from: smtpUser,
+      to: to,
+      subject: subject,
+      content: html,
+      html: html,
+    });
+
+    await client.close();
+
+    return new Response(JSON.stringify({ success: true }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -73,3 +61,4 @@ serve(async (req) => {
     });
   }
 });
+
