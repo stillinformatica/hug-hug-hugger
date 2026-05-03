@@ -107,6 +107,8 @@ serve(async (req) => {
       </soapenv:Envelope>
     `;
 
+    // Production: https://www.totalexpress.com.br/wms/WebServiceV1
+    // Homologation: https://awshomolog.totalexpress.com.br/wms/WebServiceV1
     const totalExpressUrl = "https://www.totalexpress.com.br/wms/WebServiceV1";
     let shippingOptions = [];
 
@@ -128,6 +130,9 @@ serve(async (req) => {
       const prazoMatch = xmlText.match(/<PrazoEntrega>(.*?)<\/PrazoEntrega>/);
       const erroMatch = xmlText.match(/<Erro>(.*?)<\/Erro>/);
       const erroCodMatch = xmlText.match(/<CodigoErro>(.*?)<\/CodigoErro>/);
+      
+      // Also check for common error messages in the HTML if API returns 429 or other errors
+      const isHtmlError = xmlText.includes("<html") || xmlText.includes("<!DOCTYPE html");
 
       if (valorFreteMatch) {
         shippingOptions.push({
@@ -138,8 +143,10 @@ serve(async (req) => {
           estimated_days: parseInt(prazoMatch ? prazoMatch[1] : "5") + 2, // adding buffer
           description: "Entrega via Total Express",
         });
+      } else if (isHtmlError) {
+        console.warn("Total Express returned HTML (likely Rate Limit or WAF error)");
       } else if (erroMatch && erroCodMatch && erroCodMatch[1] !== "0") {
-        console.warn("Total Express API Error:", erroMatch[1]);
+        console.warn(`Total Express API Error ${erroCodMatch[1]}: ${erroMatch[1]}`);
       }
     } catch (e) {
       console.error("Total Express integration error:", e);
