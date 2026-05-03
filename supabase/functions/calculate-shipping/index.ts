@@ -49,16 +49,47 @@ serve(async (req) => {
       console.warn("CEP fetch failed", e);
     }
 
-    // Default values if product doesn't have weight/dims
-    // Using small defaults (0.5kg, 15x15x15)
-    const totalWeight = items?.reduce((acc: number, item: any) => acc + (item.weight || 0.5) * (item.quantity || 1), 0) || 0.5;
+    // Product dimensions and weight calculation
+    let totalWeight = 0;
+    let totalValue = 0;
     
-    // Simple volume calculation for Total Express (summing heights or taking max of dimensions)
-    const maxWidth = Math.max(...(items?.map((i: any) => i.width || 15) || [15]));
-    const maxLength = Math.max(...(items?.map((i: any) => i.length || 15) || [15]));
-    const totalHeight = items?.reduce((acc: number, item: any) => acc + (item.height || 10) * (item.quantity || 1), 0) || 10;
+    // We'll calculate a bounding box or sum of volumes for Total Express
+    // For simplicity with multiple items, we'll sum weights and use the largest dimensions as a base
+    let maxL = 0;
+    let maxW = 0;
+    let sumH = 0;
+
+    if (items && items.length > 0) {
+      items.forEach((item: any) => {
+        const qty = item.quantity || 1;
+        const w = Number(item.weight) || 0.5;
+        totalWeight += w * qty;
+        totalValue += (Number(item.price) || 0) * qty;
+        
+        maxL = Math.max(maxL, Number(item.length) || 15);
+        maxW = Math.max(maxW, Number(item.width) || 15);
+        sumH += (Number(item.height) || 10) * qty;
+      });
+    } else {
+      totalWeight = 0.5;
+      totalValue = 100;
+      maxL = 15;
+      maxW = 15;
+      sumH = 10;
+    }
+
+    // Ensure minimum dimensions for Total Express if needed
+    const finalWeight = Math.max(totalWeight, 0.1);
+    const finalLength = Math.max(maxL, 15);
+    const finalWidth = Math.max(maxW, 15);
+    const finalHeight = Math.max(sumH, 2);
+
+    console.log(`Calculating shipping for CEP ${cep}: Weight=${finalWeight}kg, L=${finalLength}, W=${finalWidth}, H=${finalHeight}, Value=${totalValue}`);
 
     // Total Express SOAP Request for CalcFrete
+    // Note: Some Total Express implementations require Peso, Altura, Largura, Comprimento separately
+    // The current version uses a simplified CalcFrete, but we should check if they need the dimensions.
+    // Based on common Total Express docs, CalcFrete usually takes these parameters:
     const soapRequest = `
       <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:web="https://www.totalexpress.com.br/wms/WebServiceV1">
          <soapenv:Header/>
@@ -68,18 +99,17 @@ serve(async (req) => {
                <web:senha>${TOTAL_EXPRESS_PASSWORD}</web:senha>
                <web:cepOrigem>${ORIGIN_CEP.replace(/\D/g, "")}</web:cepOrigem>
                <web:cepDestino>${cep}</web:cepDestino>
-               <web:peso>${totalWeight.toFixed(2)}</web:peso>
-               <web:vlrMercadoria>${items?.reduce((acc: number, item: any) => acc + (item.price || 0) * (item.quantity || 1), 0) || 100}</web:vlrMercadoria>
+               <web:peso>${finalWeight.toFixed(2)}</web:peso>
+               <web:vlrMercadoria>${totalValue.toFixed(2)}</web:vlrMercadoria>
                <web:tipoServico>EXP</web:tipoServico>
             </web:CalcFrete>
          </soapenv:Body>
       </soapenv:Envelope>
     `;
 
-    // Note: URL might vary depending on environment (Homologation vs Production)
-    // Production usually: https://www.totalexpress.com.br/wms/WebServiceV1
+    // Production: https://www.totalexpress.com.br/wms/WebServiceV1
+    // Homologation: https://awshomolog.totalexpress.com.br/wms/WebServiceV1
     const totalExpressUrl = "https://www.totalexpress.com.br/wms/WebServiceV1";
-    
     let shippingOptions = [];
 
     try {
@@ -100,6 +130,9 @@ serve(async (req) => {
       const prazoMatch = xmlText.match(/<PrazoEntrega>(.*?)<\/PrazoEntrega>/);
       const erroMatch = xmlText.match(/<Erro>(.*?)<\/Erro>/);
       const erroCodMatch = xmlText.match(/<CodigoErro>(.*?)<\/CodigoErro>/);
+      
+      // Also check for common error messages in the HTML if API returns 429 or other errors
+      const isHtmlError = xmlText.includes("<html") || xmlText.includes("<!DOCTYPE html");
 
       if (valorFreteMatch) {
         shippingOptions.push({
@@ -110,11 +143,14 @@ serve(async (req) => {
           estimated_days: parseInt(prazoMatch ? prazoMatch[1] : "5") + 2, // adding buffer
           description: "Entrega via Total Express",
         });
+      } else if (isHtmlError) {
+        console.warn("Total Express returned HTML (likely Rate Limit or WAF error)");
       } else if (erroMatch && erroCodMatch && erroCodMatch[1] !== "0") {
-        console.warn("Total Express API Error:", erroMatch[1]);
+        console.warn(`Total Express API Error ${erroCodMatch[1]}: ${erroMatch[1]}`);
       }
     } catch (e) {
       console.error("Total Express integration error:", e);
+      // We'll catch and log, letting it fall back to standard if needed
     }
 
     // Fallback if Total Express fails or returns no options
