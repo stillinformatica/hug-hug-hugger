@@ -109,29 +109,55 @@ serve(async (req) => {
 
     // Production: https://www.totalexpress.com.br/wms/WebServiceV1
     // Homologation: https://awshomolog.totalexpress.com.br/wms/WebServiceV1
-    const totalExpressUrl = "https://www.totalexpress.com.br/wms/WebServiceV1";
+    const totalExpressUrl = "https://awshomolog.totalexpress.com.br/wms/WebServiceV1";
     let shippingOptions = [];
 
-    try {
-      const response = await fetch(totalExpressUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/xml; charset=utf-8",
-          "SOAPAction": "https://www.totalexpress.com.br/wms/WebServiceV1/CalcFrete"
-        },
-        body: soapRequest,
-      });
+    // Maximum 3 retries for 429 errors
+    let retries = 0;
+    const maxRetries = 2;
+    let response;
+    let xmlText = "";
 
-      const xmlText = await response.text();
-      console.log("Total Express Response:", xmlText);
+    while (retries <= maxRetries) {
+      try {
+        response = await fetch(totalExpressUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "text/xml; charset=utf-8",
+            "SOAPAction": "https://www.totalexpress.com.br/wms/WebServiceV1/CalcFrete"
+          },
+          body: soapRequest,
+        });
 
+        xmlText = await response.text();
+        
+        if (response.status === 429 || xmlText.includes("Erro 429") || xmlText.includes("Muitas solicitações")) {
+          console.warn(`Total Express Rate Limit (429) hit. Retry ${retries + 1}/${maxRetries}`);
+          retries++;
+          if (retries <= maxRetries) {
+            // Wait 1-2 seconds before retrying
+            await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+            continue;
+          }
+        }
+        break;
+      } catch (e) {
+        console.error(`Total Express fetch attempt ${retries} failed:`, e);
+        retries++;
+        if (retries > maxRetries) break;
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+
+    console.log("Total Express Response:", xmlText);
+
+    if (xmlText) {
       // Simple XML parsing for the specific fields we need
       const valorFreteMatch = xmlText.match(/<ValorFrete>(.*?)<\/ValorFrete>/);
       const prazoMatch = xmlText.match(/<PrazoEntrega>(.*?)<\/PrazoEntrega>/);
       const erroMatch = xmlText.match(/<Erro>(.*?)<\/Erro>/);
       const erroCodMatch = xmlText.match(/<CodigoErro>(.*?)<\/CodigoErro>/);
       
-      // Also check for common error messages in the HTML if API returns 429 or other errors
       const isHtmlError = xmlText.includes("<html") || xmlText.includes("<!DOCTYPE html");
 
       if (valorFreteMatch) {
@@ -148,9 +174,6 @@ serve(async (req) => {
       } else if (erroMatch && erroCodMatch && erroCodMatch[1] !== "0") {
         console.warn(`Total Express API Error ${erroCodMatch[1]}: ${erroMatch[1]}`);
       }
-    } catch (e) {
-      console.error("Total Express integration error:", e);
-      // We'll catch and log, letting it fall back to standard if needed
     }
 
     // Fallback if Total Express fails or returns no options
