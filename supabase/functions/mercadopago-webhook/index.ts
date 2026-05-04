@@ -125,19 +125,17 @@ serve(async (req) => {
     } else {
       console.log("Pedido atualizado:", referenceId, "->", mappedStatus);
       
-      // Enviar e-mail se o pagamento foi aprovado
+      // Enviar e-mail e registrar coleta se o pagamento foi aprovado
       if (mappedStatus === "PAID") {
         try {
           const { data: orderData } = await supabase
             .from("orders")
-            .select("customer_email, customer_name, total_amount")
+            .select("*, order_items(*)")
             .eq("reference_id", referenceId)
             .single();
 
           if (orderData?.customer_email) {
             console.log("Enviando e-mail de confirmação para:", orderData.customer_email);
-            const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-            const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
             
             await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
               method: "POST",
@@ -159,8 +157,23 @@ serve(async (req) => {
               }),
             });
           }
-        } catch (mailError) {
-          console.error("Erro ao disparar e-mail de confirmação:", mailError);
+
+          // Registrar coleta na Total Express
+          console.log("Registrando coleta na Total Express para o pedido:", referenceId);
+          await fetch(`${SUPABASE_URL}/functions/v1/calculate-shipping`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            },
+            body: JSON.stringify({ 
+              action: "register_collection",
+              order: orderData 
+            }),
+          });
+
+        } catch (procError) {
+          console.error("Erro no processamento pós-pagamento:", procError);
         }
       }
     }

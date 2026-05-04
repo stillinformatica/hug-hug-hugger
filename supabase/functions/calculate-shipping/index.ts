@@ -16,7 +16,70 @@ serve(async (req) => {
   }
 
   try {
-    const { postal_code, items } = await req.json();
+    const body = await req.json();
+    const { action, order, postal_code, items } = body;
+
+    // Se a ação for registrar coleta (pós-pagamento)
+    if (action === "register_collection" && order) {
+      console.log("Iniciando Registro de Coleta na Total Express para o pedido:", order.id);
+      
+      const itemsList = order.order_items || [];
+      const totalVolumes = itemsList.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0);
+      
+      // Construir XML de RegistraColeta baseado no manual
+      const registerXml = `<?xml version="1.0" encoding="utf-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="urn:RegistraColeta">
+   <soapenv:Header/>
+   <soapenv:Body>
+      <urn:RegistraColeta>
+         <RegistraColetaRequest>
+            <Encomendas>
+               <item>
+                  <TipoServico>1</TipoServico>
+                  <TipoEntrega>0</TipoEntrega>
+                  <Volumes>${totalVolumes}</Volumes>
+                  <CondFrete>CIF</CondFrete>
+                  <Pedido>${order.reference_id || order.id}</Pedido>
+                  <IdCliente>${order.id}</IdCliente>
+                  <Natureza>Produtos de Informatica</Natureza>
+                  <IsencaoIcms>0</IsencaoIcms>
+                  <DestNome>${order.customer_name || 'Cliente'}</DestNome>
+                  <DestCpfCnpj>${(order.customer_cpf || '').replace(/\D/g, '')}</DestCpfCnpj>
+                  <DestEnd>${order.shipping_address || ''}</DestEnd>
+                  <DestEndNum>${order.shipping_number || 'S/N'}</DestEndNum>
+                  <DestCompl>${order.shipping_complement || ''}</DestCompl>
+                  <DestBairro>${order.shipping_neighborhood || ''}</DestBairro>
+                  <DestCidade>${order.shipping_city || ''}</DestCidade>
+                  <DestEstado>${order.shipping_state || ''}</DestEstado>
+                  <DestCep>${(order.postal_code || '').replace(/\D/g, '')}</DestCep>
+                  <DestEmail>${order.customer_email || ''}</DestEmail>
+                  <DestDdd>${(order.customer_phone || '').substring(0, 2)}</DestDdd>
+                  <DestTelefone1>${(order.customer_phone || '').substring(2)}</DestTelefone1>
+               </item>
+            </Encomendas>
+         </RegistraColetaRequest>
+      </urn:RegistraColeta>
+   </soapenv:Body>
+</soapenv:Envelope>`;
+
+      const response = await fetch("https://edi.totalexpress.com.br/webservice24.php", {
+        method: "POST",
+        headers: {
+          "Content-Type": "text/xml; charset=utf-8",
+          "SOAPAction": "urn:RegistraColeta#RegistraColeta",
+          "User-Agent": "Mozilla/5.0"
+        },
+        body: registerXml,
+      });
+
+      const resultText = await response.text();
+      console.log("Total Express Register Response:", resultText);
+
+      return new Response(JSON.stringify({ success: true, result: resultText }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     if (!postal_code || typeof postal_code !== "string") {
       return new Response(JSON.stringify({ error: "CEP é obrigatório" }), {
