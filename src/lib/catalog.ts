@@ -28,7 +28,7 @@ export const fallbackProducts: CatalogProduct[] = [
     id: "fallback-notebook-dell",
     name: "Notebook Dell i5 8GB SSD 256GB",
     description: "Notebook revisado, ideal para estudo, escritório e uso diário.",
-    category: "Notebooks Usados",
+    category: "Notebooks",
     price: 2199.9,
     images: [placeholderImage],
     created_at: "2026-04-02T10:00:00.000Z",
