@@ -25,8 +25,10 @@ serve(async (req) => {
       
       const itemsList = order.order_items || [];
       const totalVolumes = itemsList.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0);
+      const totalWeight = itemsList.reduce((acc: number, item: any) => acc + (Number(item.weight || 0.5) * (item.quantity || 1)), 0);
+      const totalValue = Number(order.total_amount || 0);
       
-      // Construir XML de RegistraColeta baseado no manual
+      // Construir XML de RegistraColeta baseado no layout detalhado v24
       const registerXml = `<?xml version="1.0" encoding="utf-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="urn:RegistraColeta">
    <soapenv:Header/>
@@ -37,24 +39,33 @@ serve(async (req) => {
                <item>
                   <TipoServico>1</TipoServico>
                   <TipoEntrega>0</TipoEntrega>
+                  <Peso>${totalWeight.toFixed(2)}</Peso>
                   <Volumes>${totalVolumes}</Volumes>
                   <CondFrete>CIF</CondFrete>
-                  <Pedido>${order.reference_id || order.id}</Pedido>
-                  <IdCliente>${order.id}</IdCliente>
+                  <Pedido>${(order.reference_id || order.id).substring(0, 20)}</Pedido>
                   <Natureza>Produtos de Informatica</Natureza>
                   <IsencaoIcms>0</IsencaoIcms>
-                  <DestNome>${order.customer_name || 'Cliente'}</DestNome>
-                  <DestCpfCnpj>${(order.customer_cpf || '').replace(/\D/g, '')}</DestCpfCnpj>
-                  <DestEnd>${order.shipping_address || ''}</DestEnd>
-                  <DestEndNum>${order.shipping_number || 'S/N'}</DestEndNum>
-                  <DestCompl>${order.shipping_complement || ''}</DestCompl>
-                  <DestBairro>${order.shipping_neighborhood || ''}</DestBairro>
-                  <DestCidade>${order.shipping_city || ''}</DestCidade>
-                  <DestEstado>${order.shipping_state || ''}</DestEstado>
-                  <DestCep>${(order.postal_code || '').replace(/\D/g, '')}</DestCep>
-                  <DestEmail>${order.customer_email || ''}</DestEmail>
-                  <DestDdd>${(order.customer_phone || '').substring(0, 2)}</DestDdd>
-                  <DestTelefone1>${(order.customer_phone || '').substring(2)}</DestTelefone1>
+                  <DestNome>${(order.customer_name || 'Cliente').substring(0, 40)}</DestNome>
+                  <DestCpfCnpj>${(order.customer_cpf || '').replace(/\D/g, '').substring(0, 14)}</DestCpfCnpj>
+                  <DestEnd>${(order.shipping_address || '').substring(0, 80)}</DestEnd>
+                  <DestEndNum>${(order.shipping_number || 'S/N').substring(0, 10)}</DestEndNum>
+                  <DestCompl>${(order.shipping_complement || '').substring(0, 60)}</DestCompl>
+                  <DestBairro>${(order.shipping_neighborhood || '').substring(0, 40)}</DestBairro>
+                  <DestCidade>${(order.shipping_city || '').substring(0, 40)}</DestCidade>
+                  <DestEstado>${(order.shipping_state || '').substring(0, 2)}</DestEstado>
+                  <DestCep>${(order.postal_code || '').replace(/\D/g, '').substring(0, 8)}</DestCep>
+                  <DestEmail>${(order.customer_email || '').substring(0, 60)}</DestEmail>
+                  <DestDdd>${(order.customer_phone || '').replace(/\D/g, '').substring(0, 2)}</DestDdd>
+                  <DestTelefone1>${(order.customer_phone || '').replace(/\D/g, '').substring(2, 11)}</DestTelefone1>
+                  <DocFiscalO>
+                     <item>
+                        <NfoTipo>00</NfoTipo>
+                        <NfoNumero>${(order.reference_id || order.id).replace(/\D/g, '').substring(0, 9)}</NfoNumero>
+                        <NfoData>${new Date().toISOString().split('T')[0]}</NfoData>
+                        <NfoValTotal>${totalValue.toFixed(2)}</NfoValTotal>
+                        <NfoValProd>${totalValue.toFixed(2)}</NfoValProd>
+                     </item>
+                  </DocFiscalO>
                </item>
             </Encomendas>
          </RegistraColetaRequest>
