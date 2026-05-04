@@ -75,7 +75,22 @@ serve(async (req) => {
       const resultText = await response.text();
       console.log("Total Express Register Response:", resultText);
 
-      return new Response(JSON.stringify({ success: true, result: resultText }), {
+      // Extract Protocol Number if success
+      const protocolMatch = resultText.match(/<NumProtocolo.*?>(.*?)<\/NumProtocolo>/);
+      const protocol = protocolMatch ? protocolMatch[1] : null;
+
+      if (protocol) {
+        console.log("Coleta registrada com sucesso. Protocolo:", protocol);
+        // We could also update the order table here to store the protocol
+      } else {
+        console.warn("Possível falha no registro da coleta ou formato inesperado.");
+      }
+
+      return new Response(JSON.stringify({ 
+        success: !!protocol, 
+        protocol,
+        raw_result: resultText 
+      }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
