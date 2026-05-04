@@ -15,20 +15,18 @@ interface StoreHeaderProps {
 
 const navLinks = [
   { label: "Todos", href: "/" },
-  { label: "Computadores Montados", href: "/?q=computadores+montados" },
   { label: "Eletrônicos", href: "/?q=eletronicos" },
-  { label: "Fontes", href: "/?q=fontes" },
-  { label: "Gabinetes", href: "/?q=gabinetes" },
-  { label: "Kit Placa-Mãe + Processador", href: "/?q=kit+placa+mae+processador" },
+  { label: "Computadores Montados", href: "/?q=computadores+montados" },
   { label: "Memórias", href: "/?q=memorias" },
-  { label: "Notebooks Peças", href: "/?q=notebooks+pecas" },
-  { label: "Notebooks Usados", href: "/?q=notebooks+usados" },
-  { label: "Periféricos", href: "/?q=perifericos" },
-  { label: "Placa de Vídeo", href: "/?q=placa+de+video" },
+  { label: "Notebooks", href: "/?q=notebooks" },
   { label: "Placa-mãe", href: "/?q=placa+mae" },
   { label: "Processador", href: "/?q=processador" },
-  { label: "Segurança", href: "/?q=seguranca" },
+  { label: "Placa de Vídeo", href: "/?q=placa+de+video" },
+  { label: "Fontes", href: "/?q=fontes" },
+  { label: "Gabinetes", href: "/?q=gabinetes" },
+  { label: "Periféricos", href: "/?q=perifericos" },
   { label: "SSDs e HDs", href: "/?q=ssds+e+hds" },
+  { label: "Segurança", href: "/?q=seguranca" },
 ];
 
 export const StoreHeader = ({ searchQuery, onSearchChange }: StoreHeaderProps) => {

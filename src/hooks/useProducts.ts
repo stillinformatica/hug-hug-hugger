@@ -27,7 +27,11 @@ export function useProducts(searchQuery?: string) {
           .order('created_at', { ascending: false });
 
         if (searchQuery) {
-          query = query.or(`name.ilike.%${searchQuery}%,category.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`);
+          const terms = searchQuery.split(' ').filter(t => t.length > 0);
+          const orConditions = terms.map(term => 
+            `name.ilike.%${term}%,category.ilike.%${term}%,description.ilike.%${term}%`
+          ).join(',');
+          query = query.or(orConditions);
         }
 
         const { data, error } = await query;
