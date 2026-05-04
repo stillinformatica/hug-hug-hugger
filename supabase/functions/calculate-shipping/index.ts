@@ -90,27 +90,27 @@ serve(async (req) => {
     // Total Express SOAP Request for CalcFrete
     // Note: Some Total Express implementations require Peso, Altura, Largura, Comprimento separately
     // The current version uses a simplified CalcFrete, but we should check if they need the dimensions.
-    // Based on common Total Express docs, CalcFrete usually takes these parameters:
-    const soapRequest = `
-      <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:web="https://www.totalexpress.com.br/wms/WebServiceV1">
-         <soapenv:Header/>
-         <soapenv:Body>
-            <web:CalcFrete>
-               <web:usuario>${TOTAL_EXPRESS_USER}</web:usuario>
-               <web:senha>${TOTAL_EXPRESS_PASSWORD}</web:senha>
-               <web:reid>${TOTAL_EXPRESS_REID}</web:reid>
-               <web:cepOrigem>${ORIGIN_CEP.replace(/\D/g, "")}</web:cepOrigem>
-               <web:cepDestino>${cep}</web:cepDestino>
-               <web:peso>${finalWeight.toFixed(2)}</web:peso>
-               <web:vlrMercadoria>${totalValue.toFixed(2)}</web:vlrMercadoria>
-               <web:tipoServico>EXP</web:tipoServico>
-            </web:CalcFrete>
-         </soapenv:Body>
-      </soapenv:Envelope>
-    `;
+    // Based on the manual provided:
+    // Endpoint: https://edi.totalexpress.com.br/webservice24.php?wsdl
+    // SOAP 1.1 UTF-8
+    const soapRequest = `<?xml version="1.0" encoding="utf-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:web="urn:TotalExpress">
+   <soapenv:Header/>
+   <soapenv:Body>
+      <web:CalcFrete>
+         <web:usuario>${TOTAL_EXPRESS_USER}</web:usuario>
+         <web:senha>${TOTAL_EXPRESS_PASSWORD}</web:senha>
+         <web:reid>${TOTAL_EXPRESS_REID}</web:reid>
+         <web:cepOrigem>${ORIGIN_CEP.replace(/\D/g, "")}</web:cepOrigem>
+         <web:cepDestino>${cep}</web:cepDestino>
+         <web:peso>${finalWeight.toFixed(2)}</web:peso>
+         <web:vlrMercadoria>${totalValue.toFixed(2)}</web:vlrMercadoria>
+         <web:tipoServico>EXP</web:tipoServico>
+      </web:CalcFrete>
+   </soapenv:Body>
+</soapenv:Envelope>`;
 
-    // Production: https://www.totalexpress.com.br/wms/WebServiceV1
-    const totalExpressUrl = "https://www.totalexpress.com.br/wms/WebServiceV1";
+    const totalExpressUrl = "https://edi.totalexpress.com.br/webservice24.php";
     let shippingOptions = [];
 
     // Maximum 3 retries for 429 errors
@@ -126,7 +126,7 @@ serve(async (req) => {
           method: "POST",
           headers: {
             "Content-Type": "text/xml; charset=utf-8",
-            "SOAPAction": "https://www.totalexpress.com.br/wms/WebServiceV1/CalcFrete",
+            "SOAPAction": "urn:TotalExpress#CalcFrete",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           },
           body: soapRequest,
