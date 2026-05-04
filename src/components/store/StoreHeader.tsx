@@ -15,11 +15,11 @@ interface StoreHeaderProps {
 
 const navLinks = [
   { label: "Todos", href: "/" },
-  { label: "Eletrônicos", href: "/?q=eletronicos" },
+  { label: "Eletrônicos", href: "/?q=eletrônicos" },
   { label: "Computadores Montados", href: "/?q=computadores+montados" },
   { label: "Memórias", href: "/?q=memórias" },
   { label: "Notebooks", href: "/?q=notebooks" },
-  { label: "Placa-mãe", href: "/?q=placa+mae" },
+  { label: "Placa-mãe", href: "/?q=placa-mãe" },
   { label: "Processador", href: "/?q=processador" },
   { label: "Placa de Vídeo", href: "/?q=placa+de+video" },
   { label: "Fontes", href: "/?q=fontes" },
