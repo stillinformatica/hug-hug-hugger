@@ -8,7 +8,7 @@ const corsHeaders = {
 const TOTAL_EXPRESS_USER = Deno.env.get("TOTAL_EXPRESS_USER");
 const TOTAL_EXPRESS_PASSWORD = Deno.env.get("TOTAL_EXPRESS_PASSWORD");
 const TOTAL_EXPRESS_REID = Deno.env.get("TOTAL_EXPRESS_REID");
-const QUOTAGUARD_URL = Deno.env.get("QUOTAGUARD_URL");
+// QuotaGuard URL removed as requested for free tier
 const ORIGIN_CEP = "07063-000";
 
 serve(async (req) => {
@@ -223,25 +223,7 @@ serve(async (req) => {
           body: soapRequest,
         };
 
-        // If proxy is configured, use it for the fetch
-        if (QUOTAGUARD_URL) {
-          console.log("Using static IP proxy...");
-          // Deno's native fetch supports the 'proxy' option for routing through a SOCKS5 or HTTP proxy
-          // Note: Standard fetch in Deno/Browser doesn't have a 'proxy' property, 
-          // we use the system proxy environment if available, but for explicit proxy:
-          // We can use a custom client or headers if needed, but usually Deno respect HTTP_PROXY env.
-          // In Supabase Edge Functions, we can pass a custom dispatcher or use standard fetch if configured at runtime.
-          // For now, we add the Proxy-Authorization header if it's an HTTP proxy
-          try {
-            const proxyUrl = new URL(QUOTAGUARD_URL);
-            if (proxyUrl.username && proxyUrl.password) {
-              const auth = btoa(`${proxyUrl.username}:${proxyUrl.password}`);
-              fetchOptions.headers["Proxy-Authorization"] = `Basic ${auth}`;
-            }
-          } catch (e) {
-            console.error("Error parsing QUOTAGUARD_URL:", e);
-          }
-        }
+        // Proxy logic removed to keep project on free tier
 
         response = await fetch(totalExpressUrl, fetchOptions);
 
