@@ -105,9 +105,21 @@ export function filterProducts(products: CatalogProduct[], searchQuery?: string)
 
   if (!term) return products;
 
-  return products.filter((product) =>
-    [product.name, product.category, product.description]
+  const categories = [
+    "eletrônicos", "computadores montados", "memórias", "notebooks", 
+    "placa-mãe", "processador", "placa de vídeo", "fontes", 
+    "gabinetes", "periféricos", "ssds e hds", "segurança"
+  ];
+
+  const isCategorySearch = categories.includes(term);
+
+  return products.filter((product) => {
+    if (isCategorySearch) {
+      return product.category?.toLowerCase() === term;
+    }
+    
+    return [product.name, product.description]
       .filter(Boolean)
-      .some((value) => value!.toLowerCase().includes(term))
-  );
+      .some((value) => value!.toLowerCase().includes(term));
+  });
 }
