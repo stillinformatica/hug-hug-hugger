@@ -17,7 +17,7 @@ const navLinks = [
   { label: "Todos", href: "/" },
   { label: "Eletrônicos", href: "/?q=eletronicos" },
   { label: "Computadores Montados", href: "/?q=computadores+montados" },
-  { label: "Memórias", href: "/?q=memorias" },
+  { label: "Memórias", href: "/?q=memórias" },
   { label: "Notebooks", href: "/?q=notebooks" },
   { label: "Placa-mãe", href: "/?q=placa+mae" },
   { label: "Processador", href: "/?q=processador" },
