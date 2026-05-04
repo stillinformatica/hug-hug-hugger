@@ -8,10 +8,11 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Loader2, ArrowLeft, Save, MapPin, Package, Settings, Tag } from "lucide-react";
+import { Loader2, ArrowLeft, Save, MapPin, Package, Settings, Tag, ShoppingBag } from "lucide-react";
 import logo from "@/assets/logo.png";
 import ProductsManager from "@/components/admin/ProductsManager";
 import CategoriesManager from "@/components/admin/CategoriesManager";
+import OrdersManager from "@/components/admin/OrdersManager";
 
 interface SenderAddress {
   name: string;
@@ -122,6 +123,7 @@ const Admin = () => {
         <Tabs defaultValue="products">
           <TabsList className="mb-6">
             <TabsTrigger value="products" className="gap-2"><Package className="h-4 w-4" />Produtos</TabsTrigger>
+            <TabsTrigger value="orders" className="gap-2"><ShoppingBag className="h-4 w-4" />Pedidos</TabsTrigger>
             <TabsTrigger value="categories" className="gap-2"><Tag className="h-4 w-4" />Categorias</TabsTrigger>
             <TabsTrigger value="address" className="gap-2"><MapPin className="h-4 w-4" />Endereço Remetente</TabsTrigger>
             <TabsTrigger value="settings" className="gap-2"><Settings className="h-4 w-4" />Configurações</TabsTrigger>
@@ -129,6 +131,10 @@ const Admin = () => {
 
           <TabsContent value="products">
             <ProductsManager />
+          </TabsContent>
+
+          <TabsContent value="orders">
+            <OrdersManager />
           </TabsContent>
 
           <TabsContent value="categories">
