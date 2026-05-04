@@ -146,13 +146,19 @@ serve(async (req) => {
               body: JSON.stringify({
                 to: orderData.customer_email,
                 subject: "Pagamento Confirmado! - Still Informatica",
+                from: "Still Informatica <contato@stillinformatica.com.br>",
                 html: `
-                  <h1>Olá, ${orderData.customer_name || 'Cliente'}!</h1>
-                  <p>Seu pagamento do pedido <strong>${referenceId}</strong> foi confirmado com sucesso.</p>
-                  <p>Valor total: R$ ${orderData.total_amount}</p>
-                  <p>Em breve você receberá as informações de envio.</p>
-                  <br>
-                  <p>Atenciosamente,<br>Equipe Still Informatica</p>
+                  <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                    <h1 style="color: #28a745;">Pagamento Confirmado!</h1>
+                    <p>Olá, ${orderData.customer_name || 'Cliente'}!</p>
+                    <p>Seu pagamento do pedido <strong>${referenceId}</strong> foi confirmado com sucesso.</p>
+                    <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                      <p style="margin: 0;"><strong>Valor Total:</strong> R$ ${Number(orderData.total_amount).toFixed(2).replace(".", ",")}</p>
+                    </div>
+                    <p>Em breve você receberá as informações de envio.</p>
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+                    <p>Atenciosamente,<br>Equipe Still Informatica</p>
+                  </div>
                 `,
               }),
             });

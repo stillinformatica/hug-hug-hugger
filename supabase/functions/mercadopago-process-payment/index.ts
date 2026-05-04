@@ -121,13 +121,18 @@ serve(async (req) => {
             body: JSON.stringify({
               to: customer?.email,
               subject: `Pedido Recebido! #${referenceId} - Still Informatica`,
+              from: "Still Informatica <contato@stillinformatica.com.br>",
               html: `
-                <h1>Olá, ${customer?.name || 'Cliente'}!</h1>
-                <p>Recebemos o seu pedido <strong>${referenceId}</strong>.</p>
-                <p>Status atual: <strong>Aguardando Pagamento</strong>.</p>
-                <p>Assim que o pagamento for confirmado, iniciaremos o processo de separação e envio.</p>
-                <br>
-                <p>Atenciosamente,<br>Equipe Still Informatica</p>
+                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                  <h1 style="color: #007bff;">Olá, ${customer?.name || 'Cliente'}!</h1>
+                  <p>Recebemos o seu pedido <strong>${referenceId}</strong>.</p>
+                  <p>Status atual: <strong>Aguardando Pagamento</strong>.</p>
+                  <p>Assim que o pagamento for confirmado, iniciaremos o processo de separação e envio.</p>
+                  <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                    <p style="margin: 0;"><strong>Valor Total:</strong> R$ ${totalAmount.toFixed(2).replace(".", ",")}</p>
+                  </div>
+                  <p>Atenciosamente,<br>Equipe Still Informatica</p>
+                </div>
               `,
             }),
           });
