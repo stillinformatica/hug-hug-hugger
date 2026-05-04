@@ -274,11 +274,11 @@ serve(async (req) => {
     if (shippingOptions.length === 0) {
       shippingOptions.push({
         id: "standard_shipping",
-        name: "Envio Padrão",
+        name: "Envio padrão",
         price: 25.0,
         currency: "BRL",
         estimated_days: 7,
-        description: "Opção de envio padrão (contingência)",
+        description: "Envio padrão: 7 dias úteis - R$25,00",
       });
     }
 
