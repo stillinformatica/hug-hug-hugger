@@ -7,6 +7,7 @@ const corsHeaders = {
 
 const TOTAL_EXPRESS_USER = Deno.env.get("TOTAL_EXPRESS_USER");
 const TOTAL_EXPRESS_PASSWORD = Deno.env.get("TOTAL_EXPRESS_PASSWORD");
+const TOTAL_EXPRESS_REID = Deno.env.get("TOTAL_EXPRESS_REID");
 const ORIGIN_CEP = "07063-000";
 
 serve(async (req) => {
@@ -97,6 +98,7 @@ serve(async (req) => {
             <web:CalcFrete>
                <web:usuario>${TOTAL_EXPRESS_USER}</web:usuario>
                <web:senha>${TOTAL_EXPRESS_PASSWORD}</web:senha>
+               <web:reid>${TOTAL_EXPRESS_REID}</web:reid>
                <web:cepOrigem>${ORIGIN_CEP.replace(/\D/g, "")}</web:cepOrigem>
                <web:cepDestino>${cep}</web:cepDestino>
                <web:peso>${finalWeight.toFixed(2)}</web:peso>
@@ -108,7 +110,6 @@ serve(async (req) => {
     `;
 
     // Production: https://www.totalexpress.com.br/wms/WebServiceV1
-    // Homologation: https://awshomolog.totalexpress.com.br/wms/WebServiceV1
     const totalExpressUrl = "https://www.totalexpress.com.br/wms/WebServiceV1";
     let shippingOptions = [];
 
@@ -150,6 +151,7 @@ serve(async (req) => {
     }
 
     console.log("Total Express Response:", xmlText);
+    console.log("Total Express Status:", response?.status);
 
     if (xmlText) {
       // Simple XML parsing for the specific fields we need
