@@ -28,10 +28,27 @@ export function useProducts(searchQuery?: string) {
 
         if (searchQuery) {
           const terms = searchQuery.split(' ').filter(t => t.length > 0);
-          const orConditions = terms.map(term => 
-            `name.ilike.%${term}%,category.ilike.%${term}%,description.ilike.%${term}%`
-          ).join(',');
-          query = query.or(orConditions);
+          
+          // Se for uma busca exata por categoria (vinda dos links de navegação)
+          const categories = [
+            "Eletrônicos", "Computadores Montados", "Memórias", "Notebooks", 
+            "Placa-mãe", "Processador", "Placa de Vídeo", "Fontes", 
+            "Gabinetes", "Periféricos", "SSDs e HDs", "Segurança"
+          ];
+          
+          const isCategorySearch = categories.some(cat => cat.toLowerCase() === searchQuery.toLowerCase());
+
+          if (isCategorySearch) {
+            // Se for categoria, filtra apenas pelo campo category
+            query = query.ilike('category', `%${searchQuery}%`);
+          } else {
+            // Se for busca geral, mantém o comportamento de buscar no nome e descrição,
+            // mas podemos ser mais restritivos se desejar.
+            const orConditions = terms.map(term => 
+              `name.ilike.%${term}%,description.ilike.%${term}%`
+            ).join(',');
+            query = query.or(orConditions);
+          }
         }
 
         const { data, error } = await query;
