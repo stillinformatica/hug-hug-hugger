@@ -8,6 +8,7 @@ const corsHeaders = {
 const TOTAL_EXPRESS_USER = Deno.env.get("TOTAL_EXPRESS_USER");
 const TOTAL_EXPRESS_PASSWORD = Deno.env.get("TOTAL_EXPRESS_PASSWORD");
 const TOTAL_EXPRESS_REID = Deno.env.get("TOTAL_EXPRESS_REID");
+const QUOTAGUARD_URL = Deno.env.get("QUOTAGUARD_URL");
 const ORIGIN_CEP = "07063-000";
 
 serve(async (req) => {
@@ -211,7 +212,8 @@ serve(async (req) => {
     while (retries <= maxRetries) {
       try {
         console.log(`Fetching from Total Express (Attempt ${retries + 1})...`);
-        response = await fetch(totalExpressUrl, {
+        
+        const fetchOptions: any = {
           method: "POST",
           headers: {
             "Content-Type": "text/xml; charset=utf-8",
@@ -219,7 +221,29 @@ serve(async (req) => {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           },
           body: soapRequest,
-        });
+        };
+
+        // If proxy is configured, use it for the fetch
+        if (QUOTAGUARD_URL) {
+          console.log("Using static IP proxy...");
+          // Deno's native fetch supports the 'proxy' option for routing through a SOCKS5 or HTTP proxy
+          // Note: Standard fetch in Deno/Browser doesn't have a 'proxy' property, 
+          // we use the system proxy environment if available, but for explicit proxy:
+          // We can use a custom client or headers if needed, but usually Deno respect HTTP_PROXY env.
+          // In Supabase Edge Functions, we can pass a custom dispatcher or use standard fetch if configured at runtime.
+          // For now, we add the Proxy-Authorization header if it's an HTTP proxy
+          try {
+            const proxyUrl = new URL(QUOTAGUARD_URL);
+            if (proxyUrl.username && proxyUrl.password) {
+              const auth = btoa(`${proxyUrl.username}:${proxyUrl.password}`);
+              fetchOptions.headers["Proxy-Authorization"] = `Basic ${auth}`;
+            }
+          } catch (e) {
+            console.error("Error parsing QUOTAGUARD_URL:", e);
+          }
+        }
+
+        response = await fetch(totalExpressUrl, fetchOptions);
 
         xmlText = await response.text();
         console.log(`Response Status: ${response.status}`);
