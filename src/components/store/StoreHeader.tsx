@@ -15,18 +15,18 @@ interface StoreHeaderProps {
 
 const navLinks = [
   { label: "Todos", href: "/" },
-  { label: "Eletrônicos", href: "/?q=eletrônicos" },
-  { label: "Computadores Montados", href: "/?q=computadores+montados" },
-  { label: "Memórias", href: "/?q=memórias" },
-  { label: "Notebooks", href: "/?q=notebooks" },
-  { label: "Placa-mãe", href: "/?q=placa-mãe" },
-  { label: "Processador", href: "/?q=processador" },
-  { label: "Placa de Vídeo", href: "/?q=placa+de+video" },
-  { label: "Fontes", href: "/?q=fontes" },
-  { label: "Gabinetes", href: "/?q=gabinetes" },
-  { label: "Periféricos", href: "/?q=perifericos" },
-  { label: "SSDs e HDs", href: "/?q=ssds+e+hds" },
-  { label: "Segurança", href: "/?q=seguranca" },
+  { label: "Eletrônicos", href: "/?q=Eletrônicos" },
+  { label: "Computadores Montados", href: "/?q=Computadores+Montados" },
+  { label: "Memórias", href: "/?q=Memórias" },
+  { label: "Notebooks", href: "/?q=Notebooks" },
+  { label: "Placa-mãe", href: "/?q=Placa-mãe" },
+  { label: "Processador", href: "/?q=Processador" },
+  { label: "Placa de Vídeo", href: "/?q=Placa+de+Vídeo" },
+  { label: "Fontes", href: "/?q=Fontes" },
+  { label: "Gabinetes", href: "/?q=Gabinetes" },
+  { label: "Periféricos", href: "/?q=Periféricos" },
+  { label: "SSDs e HDs", href: "/?q=SSDs+e+HDs" },
+  { label: "Segurança", href: "/?q=Segurança" },
 ];
 
 export const StoreHeader = ({ searchQuery, onSearchChange }: StoreHeaderProps) => {
