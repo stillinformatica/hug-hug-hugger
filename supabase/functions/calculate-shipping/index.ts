@@ -125,7 +125,8 @@ serve(async (req) => {
           method: "POST",
           headers: {
             "Content-Type": "text/xml; charset=utf-8",
-            "SOAPAction": "https://www.totalexpress.com.br/wms/WebServiceV1/CalcFrete"
+            "SOAPAction": "https://www.totalexpress.com.br/wms/WebServiceV1/CalcFrete",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.37 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.37"
           },
           body: soapRequest,
         });
