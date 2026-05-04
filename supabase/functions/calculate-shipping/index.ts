@@ -109,7 +109,7 @@ serve(async (req) => {
 
     // Production: https://www.totalexpress.com.br/wms/WebServiceV1
     // Homologation: https://awshomolog.totalexpress.com.br/wms/WebServiceV1
-    const totalExpressUrl = "https://www.totalexpress.com.br/wms/WebServiceV1";
+    const totalExpressUrl = "https://awshomolog.totalexpress.com.br/wms/WebServiceV1";
     let shippingOptions = [];
 
     // Maximum 3 retries for 429 errors
