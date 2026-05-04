@@ -121,24 +121,27 @@ serve(async (req) => {
 
     while (retries <= maxRetries) {
       try {
+        console.log(`Fetching from Total Express (Attempt ${retries + 1})...`);
         response = await fetch(totalExpressUrl, {
           method: "POST",
           headers: {
             "Content-Type": "text/xml; charset=utf-8",
             "SOAPAction": "https://www.totalexpress.com.br/wms/WebServiceV1/CalcFrete",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.37 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.37"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
           },
           body: soapRequest,
         });
 
         xmlText = await response.text();
+        console.log(`Response Status: ${response.status}`);
         
-        if (response.status === 429 || xmlText.includes("Erro 429") || xmlText.includes("Muitas solicitações")) {
-          console.warn(`Total Express Rate Limit (429) hit. Retry ${retries + 1}/${maxRetries}`);
+        if (response.status === 429 || xmlText.includes("Erro 429") || xmlText.includes("Muitas solicitações") || response.status === 403) {
+          console.warn(`Total Express Rate Limit or WAF (Status ${response.status}) hit. Retry ${retries + 1}/${maxRetries}`);
           retries++;
           if (retries <= maxRetries) {
-            // Wait 1-2 seconds before retrying
-            await new Promise(resolve => setTimeout(resolve, 1000 * retries));
+            const waitTime = 2000 * retries;
+            console.log(`Waiting ${waitTime}ms before retry...`);
+            await new Promise(resolve => setTimeout(resolve, waitTime));
             continue;
           }
         }
@@ -147,12 +150,11 @@ serve(async (req) => {
         console.error(`Total Express fetch attempt ${retries} failed:`, e);
         retries++;
         if (retries > maxRetries) break;
-        await new Promise(resolve => setTimeout(resolve, 500));
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
 
-    console.log("Total Express Response:", xmlText);
-    console.log("Total Express Status:", response?.status);
+    console.log("Total Express Final Response:", xmlText.substring(0, 500));
 
     if (xmlText) {
       // Simple XML parsing for the specific fields we need
