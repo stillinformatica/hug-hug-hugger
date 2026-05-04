@@ -243,7 +243,7 @@ serve(async (req) => {
       }
     }
 
-    console.log("Total Express Final Response:", xmlText.substring(0, 500));
+    console.log("Total Express Final Response:", xmlText);
 
     if (xmlText) {
       // Simple XML parsing for the specific fields we need
