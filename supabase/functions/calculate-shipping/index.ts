@@ -200,7 +200,7 @@ serve(async (req) => {
    </soapenv:Body>
 </soapenv:Envelope>`;
 
-    const totalExpressUrl = "https://edi.totalexpress.com.br/webservice24.php";
+    const totalExpressUrl = "https://edi.totalexpress.com.br/webservice24.php?wsdl";
     let shippingOptions = [];
 
     // Maximum 3 retries for 429 errors
