@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Download, ExternalLink, Image as ImageIcon } from "lucide-react";
@@ -43,6 +43,10 @@ const ScreenshotsGallery = () => {
       document.body.removeChild(link);
     });
   };
+
+  useEffect(() => {
+    console.log("ScreenshotsGallery mounted");
+  }, []);
 
   return (
     <div className="container mx-auto py-8 px-4">
