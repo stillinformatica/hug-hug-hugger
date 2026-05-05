@@ -124,7 +124,7 @@ serve(async (req) => {
       });
     }
 
-    // Get address data for the UI
+    // BMP Action: Address Lookup
     let addressInfo = { street: "", neighborhood: "", city: "", state: "" };
     try {
       const cepResponse = await fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`);
