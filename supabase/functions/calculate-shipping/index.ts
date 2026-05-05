@@ -141,7 +141,7 @@ serve(async (req) => {
       console.warn("CEP fetch failed", e);
     }
 
-    // Product dimensions and weight calculation
+    // BMP Action: Weight & Dimensions Calculation
     let totalWeight = 0;
     let totalValue = 0;
     
