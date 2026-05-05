@@ -108,6 +108,7 @@ serve(async (req) => {
       });
     }
 
+    // BMP Action: Input Validation
     if (!postal_code || typeof postal_code !== "string") {
       return new Response(JSON.stringify({ error: "CEP é obrigatório" }), {
         status: 400,
@@ -123,7 +124,7 @@ serve(async (req) => {
       });
     }
 
-    // Get address data for the UI
+    // BMP Action: Address Lookup
     let addressInfo = { street: "", neighborhood: "", city: "", state: "" };
     try {
       const cepResponse = await fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`);
@@ -140,7 +141,7 @@ serve(async (req) => {
       console.warn("CEP fetch failed", e);
     }
 
-    // Product dimensions and weight calculation
+    // BMP Action: Weight & Dimensions Calculation
     let totalWeight = 0;
     let totalValue = 0;
     
@@ -177,7 +178,7 @@ serve(async (req) => {
 
     console.log(`Calculating shipping for CEP ${cep}: Weight=${finalWeight}kg, L=${finalLength}, W=${finalWidth}, H=${finalHeight}, Value=${totalValue}`);
 
-    // Total Express SOAP Request for CalcFrete
+    // BMP Action: SOAP Request Generation
     // Note: Some Total Express implementations require Peso, Altura, Largura, Comprimento separately
     // The current version uses a simplified CalcFrete, but we should check if they need the dimensions.
     // Based on the manual provided:
@@ -203,7 +204,7 @@ serve(async (req) => {
     const totalExpressUrl = "https://edi.totalexpress.com.br/webservice24.php?wsdl";
     let shippingOptions = [];
 
-    // Maximum 3 retries for 429 errors
+    // BMP Action: Web Service Integration (Total Express)
     let retries = 0;
     const maxRetries = 2;
     let response;
@@ -252,6 +253,7 @@ serve(async (req) => {
     console.log("Total Express Final Response:", xmlText);
 
     if (xmlText) {
+      // BMP Action: XML Response Processing
       // Simple XML parsing for the specific fields we need
       const valorFreteMatch = xmlText.match(/<ValorFrete>(.*?)<\/ValorFrete>/);
       const prazoMatch = xmlText.match(/<PrazoEntrega>(.*?)<\/PrazoEntrega>/);
@@ -277,7 +279,7 @@ serve(async (req) => {
       }
     }
 
-    // Fallback if Total Express fails or returns no options
+    // BMP Action: Result Delivery (JSON Response)
     if (shippingOptions.length === 0) {
       shippingOptions.push({
         id: "standard_shipping",
