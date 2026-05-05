@@ -1,4 +1,4 @@
-import { useLocation } from "react-router-dom";
+import { useLocation, Link } from "react-router-dom";
 import { useEffect } from "react";
 
 const NotFound = () => {
@@ -17,12 +17,12 @@ const NotFound = () => {
           A página que você está procurando não existe ou foi movida.
         </p>
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <a 
-            href={`${window.location.origin}/screenshots`} 
+          <Link 
+            to="/screenshots" 
             className="inline-flex items-center justify-center rounded-md bg-primary px-8 py-3 text-sm font-medium text-primary-foreground shadow transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50"
           >
             Ver fotos dos erros
-          </a>
+          </Link>
         </div>
       </div>
     </div>
