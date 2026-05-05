@@ -25,6 +25,8 @@ const AppContent = () => {
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/anuncios" element={<Anuncios />} />
         <Route path="/screenshots" element={<Screenshots />} />
+        <Route path="/fotos-erros" element={<Screenshots />} />
+
         <Route path="/auth" element={<Auth />} />
         <Route path="/admin" element={<Admin />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
