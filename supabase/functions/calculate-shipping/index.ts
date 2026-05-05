@@ -278,7 +278,7 @@ serve(async (req) => {
       }
     }
 
-    // Fallback if Total Express fails or returns no options
+    // BMP Action: Result Delivery (JSON Response)
     if (shippingOptions.length === 0) {
       shippingOptions.push({
         id: "standard_shipping",
