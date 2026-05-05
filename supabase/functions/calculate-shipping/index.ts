@@ -178,7 +178,7 @@ serve(async (req) => {
 
     console.log(`Calculating shipping for CEP ${cep}: Weight=${finalWeight}kg, L=${finalLength}, W=${finalWidth}, H=${finalHeight}, Value=${totalValue}`);
 
-    // Total Express SOAP Request for CalcFrete
+    // BMP Action: SOAP Request Generation
     // Note: Some Total Express implementations require Peso, Altura, Largura, Comprimento separately
     // The current version uses a simplified CalcFrete, but we should check if they need the dimensions.
     // Based on the manual provided:
