@@ -12,6 +12,8 @@ import NotFound from "./pages/NotFound";
 import Checkout from "./pages/Checkout";
 import Anuncios from "./pages/Anuncios";
 import ScreenshotsGallery from "./pages/Screenshots";
+import TotalExpressConfig from "./pages/TotalExpressConfig";
+
 
 const queryClient = new QueryClient();
 
@@ -27,7 +29,7 @@ const AppContent = () => {
         <Route path="/screenshots" element={<ScreenshotsGallery />} />
         <Route path="/fotos-erros" element={<ScreenshotsGallery />} />
 
-        <Route path="/auth" element={<Auth />} />
+        <Route path="/total-express-config" element={<TotalExpressConfig />} />
         <Route path="/admin" element={<Admin />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
