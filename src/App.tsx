@@ -11,7 +11,9 @@ import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import Checkout from "./pages/Checkout";
 import Anuncios from "./pages/Anuncios";
+import ScreenshotsGallery from "./pages/Screenshots";
 import TotalExpressConfig from "./pages/TotalExpressConfig";
+
 
 const queryClient = new QueryClient();
 
