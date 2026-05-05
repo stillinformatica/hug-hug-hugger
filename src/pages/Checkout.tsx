@@ -181,6 +181,7 @@ const Checkout = () => {
   const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
   const [selectedShipping, setSelectedShipping] = useState<string | null>(null);
   const [isLoadingShipping, setIsLoadingShipping] = useState(false);
+  const [shippingError, setShippingError] = useState<string | null>(null);
 
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
@@ -218,6 +219,7 @@ const Checkout = () => {
     }
 
     setIsLoadingShipping(true);
+    setShippingError(null);
     try {
       const { data, error } = await supabase.functions.invoke("calculate-shipping", {
         body: {
@@ -239,8 +241,15 @@ const Checkout = () => {
       setAddressInfo(data.address);
       setShippingOptions(data.shipping_options);
       setSelectedShipping(data.shipping_options[0]?.id || null);
+
+      // Verificação explícita de erro da Total Express baseado no retorno
+      if (data.shipping_options.length === 1 && data.shipping_options[0].id === "standard_shipping") {
+        setShippingError("A Total Express retornou 'Acesso Negado! Seu IP foi arquivado'. O suporte da transportadora precisa liberar o acesso para servidores em nuvem.");
+      }
     } catch (err) {
       console.error(err);
+      const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
+      setShippingError(`Erro ao calcular frete na Total Express: ${errorMessage}. O IP do servidor pode estar bloqueado.`);
       toast.error("Erro ao calcular frete", { description: "Verifique o CEP e tente novamente" });
     } finally {
       setIsLoadingShipping(false);
@@ -702,6 +711,15 @@ const Checkout = () => {
                           <Input id="complement" value={addressComplement} onChange={(e) => setAddressComplement(e.target.value)} placeholder="Apto, bloco..." />
                         </div>
                       </div>
+                    </div>
+                  )}
+
+                  {shippingError && (
+                    <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-xl text-sm text-destructive">
+                      <p className="font-medium flex items-center gap-2">
+                        <XCircle className="h-4 w-4" /> Erro na Integração Total Express
+                      </p>
+                      <p className="mt-1 opacity-90">{shippingError}</p>
                     </div>
                   )}
 
