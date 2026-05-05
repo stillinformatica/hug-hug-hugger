@@ -11,7 +11,7 @@ import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import Checkout from "./pages/Checkout";
 import Anuncios from "./pages/Anuncios";
-import ScreenshotsGallery from "./pages/Screenshots";
+import Screenshots from "./pages/Screenshots";
 
 const queryClient = new QueryClient();
 
@@ -24,7 +24,7 @@ const AppContent = () => {
         <Route path="/produto/:handle" element={<ProductDetail />} />
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/anuncios" element={<Anuncios />} />
-        <Route path="/screenshots" element={<ScreenshotsGallery />} />
+        <Route path="/screenshots" element={<Screenshots />} />
         <Route path="/auth" element={<Auth />} />
         <Route path="/admin" element={<Admin />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
