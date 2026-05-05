@@ -716,6 +716,15 @@ const Checkout = () => {
                     </div>
                   )}
 
+                  {shippingError && (
+                    <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-xl text-sm text-destructive">
+                      <p className="font-medium flex items-center gap-2">
+                        <XCircle className="h-4 w-4" /> Erro na Integração Total Express
+                      </p>
+                      <p className="mt-1 opacity-90">{shippingError}</p>
+                    </div>
+                  )}
+
                   {shippingOptions.length > 0 && (
                     <div className="space-y-2">
                       <Label className="flex items-center gap-2"><Truck className="h-4 w-4" /> Opções de Envio</Label>
