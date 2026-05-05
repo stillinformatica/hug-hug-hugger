@@ -11,7 +11,7 @@ import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 import Checkout from "./pages/Checkout";
 import Anuncios from "./pages/Anuncios";
-import ScreenshotsGallery from "./pages/Screenshots";
+import Screenshots from "./pages/Screenshots";
 
 const queryClient = new QueryClient();
 
