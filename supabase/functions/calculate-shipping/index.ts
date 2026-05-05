@@ -252,7 +252,7 @@ serve(async (req) => {
 
     console.log("Total Express Final Response:", xmlText);
 
-    if (xmlText) {
+    // BMP Action: XML Response Processing
       // Simple XML parsing for the specific fields we need
       const valorFreteMatch = xmlText.match(/<ValorFrete>(.*?)<\/ValorFrete>/);
       const prazoMatch = xmlText.match(/<PrazoEntrega>(.*?)<\/PrazoEntrega>/);
