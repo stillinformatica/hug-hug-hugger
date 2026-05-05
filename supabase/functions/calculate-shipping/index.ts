@@ -204,7 +204,7 @@ serve(async (req) => {
     const totalExpressUrl = "https://edi.totalexpress.com.br/webservice24.php?wsdl";
     let shippingOptions = [];
 
-    // Maximum 3 retries for 429 errors
+    // BMP Action: Web Service Integration (Total Express)
     let retries = 0;
     const maxRetries = 2;
     let response;
