@@ -108,6 +108,7 @@ serve(async (req) => {
       });
     }
 
+    // BMP Action: Input Validation
     if (!postal_code || typeof postal_code !== "string") {
       return new Response(JSON.stringify({ error: "CEP é obrigatório" }), {
         status: 400,
