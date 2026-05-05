@@ -273,6 +273,7 @@ serve(async (req) => {
         console.warn("Total Express returned HTML (likely Rate Limit or WAF error)");
       } else if (erroMatch && erroCodMatch && erroCodMatch[1] !== "0") {
         console.warn(`Total Express API Error ${erroCodMatch[1]}: ${erroMatch[1]}`);
+        throw new Error(`Total Express: ${erroMatch[1]}`);
       }
     }
 
