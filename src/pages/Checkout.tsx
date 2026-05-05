@@ -219,6 +219,7 @@ const Checkout = () => {
     }
 
     setIsLoadingShipping(true);
+    setShippingError(null);
     try {
       const { data, error } = await supabase.functions.invoke("calculate-shipping", {
         body: {
@@ -240,8 +241,17 @@ const Checkout = () => {
       setAddressInfo(data.address);
       setShippingOptions(data.shipping_options);
       setSelectedShipping(data.shipping_options[0]?.id || null);
+
+      // Se houver uma mensagem de erro vinda da Total Express (capturada no raw_result ou logs)
+      // Como a função retorna shippingOptions mesmo em erro (fallback), vamos verificar o conteúdo
+      if (data.shipping_options.length === 1 && data.shipping_options[0].id === "standard_shipping") {
+        // Buscamos detalhes do erro se disponíveis
+        console.warn("Utilizando frete de fallback.");
+      }
     } catch (err) {
       console.error(err);
+      const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
+      setShippingError(`Erro ao calcular frete na Total Express: ${errorMessage}. O IP do servidor pode estar bloqueado.`);
       toast.error("Erro ao calcular frete", { description: "Verifique o CEP e tente novamente" });
     } finally {
       setIsLoadingShipping(false);
