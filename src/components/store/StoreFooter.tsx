@@ -31,7 +31,7 @@ export const StoreFooter = () => {
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li className="flex items-center gap-2"><Phone className="h-4 w-4" /> (11) 98259-6096</li>
               <li className="flex items-center gap-2"><Mail className="h-4 w-4" /> stillinformatica@stillinformatica.com.br</li>
-              <li className="flex items-center gap-2"><MapPin className="h-4 w-4" /> Rua Gopouva 845, AP 5 - Guarulhos, SP</li>
+              <li className="flex items-center gap-2"><MapPin className="h-4 w-4" /> Rua da Justiça 58, Vila Harmonia - Guarulhos, SP - CEP 07063-000</li>
             </ul>
           </div>
 
