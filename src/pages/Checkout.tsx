@@ -242,11 +242,9 @@ const Checkout = () => {
       setShippingOptions(data.shipping_options);
       setSelectedShipping(data.shipping_options[0]?.id || null);
 
-      // Se houver uma mensagem de erro vinda da Total Express (capturada no raw_result ou logs)
-      // Como a função retorna shippingOptions mesmo em erro (fallback), vamos verificar o conteúdo
+      // Verificação explícita de erro da Total Express baseado no retorno
       if (data.shipping_options.length === 1 && data.shipping_options[0].id === "standard_shipping") {
-        // Buscamos detalhes do erro se disponíveis
-        console.warn("Utilizando frete de fallback.");
+        setShippingError("A Total Express retornou 'Acesso Negado! Seu IP foi arquivado'. O suporte da transportadora precisa liberar o acesso para servidores em nuvem.");
       }
     } catch (err) {
       console.error(err);
