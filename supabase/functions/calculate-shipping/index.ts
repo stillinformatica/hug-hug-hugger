@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -23,7 +24,11 @@ serve(async (req) => {
     if (action === "register_collection" && order) {
       console.log("Iniciando Registro de Coleta (Smart Label REST) na Total Express para o pedido:", order.id);
       
-      const itemsList = order.order_items || [];
+      const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
+      const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+      const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+      const itemsList = order.items || order.order_items || [];
       const totalVolumes = itemsList.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0);
       const totalWeight = itemsList.reduce((acc: number, item: any) => acc + (Number(item.weight || 0.5) * (item.quantity || 1)), 0);
       const totalValue = Number(order.total_amount || 0);
@@ -52,24 +57,24 @@ serve(async (req) => {
         servicoTipo: 7, // Expresso (7) para coincidir com a consulta EXP.
         entregaTipo: 0,
         peso: totalWeight,
-        volumes: totalVolumes,
+        volumes: Math.max(1, totalVolumes),
         condicaoFrete: "CIF",
         pedido: String(order.reference_id || order.id).substring(0, 20),
         natureza: "Produtos",
         isencaoIcms: 0,
         destinatario: {
           nome: String(order.customer_name || 'Cliente').substring(0, 40),
-          cpfCnpj: String(order.customer_cpf || '').replace(/\D/g, '').substring(0, 14),
-          endereco: String(order.shipping_address || '').substring(0, 80),
-          numero: String(order.shipping_number || 'S/N').substring(0, 10),
-          complemento: String(order.shipping_complement || '').substring(0, 60),
-          bairro: String(order.shipping_neighborhood || '').substring(0, 40),
-          cidade: String(order.shipping_city || '').substring(0, 40),
-          estado: String(order.shipping_state || '').substring(0, 2),
-          cep: String(order.postal_code || '').replace(/\D/g, '').substring(0, 8),
+          cpfCnpj: String(order.customer_cpf || order.shipping_address?.cpf || '').replace(/\D/g, '').substring(0, 14),
+          endereco: String(order.shipping_address?.street || order.shipping_address || '').substring(0, 80),
+          numero: String(order.shipping_address?.number || 'S/N').substring(0, 10),
+          complemento: String(order.shipping_address?.complement || '').substring(0, 60),
+          bairro: String(order.shipping_address?.locality || order.shipping_address?.neighborhood || '').substring(0, 40),
+          cidade: String(order.shipping_address?.city || '').substring(0, 40),
+          estado: String(order.shipping_address?.region_code || order.shipping_address?.state || '').substring(0, 2),
+          cep: String(order.shipping_address?.postal_code || order.postal_code || '').replace(/\D/g, '').substring(0, 8),
           email: String(order.customer_email || '').substring(0, 60),
-          ddd: String(order.customer_phone || '').replace(/\D/g, '').substring(0, 2),
-          telefone: String(order.customer_phone || '').replace(/\D/g, '').substring(2, 11),
+          ddd: String(order.customer_phone || order.shipping_address?.phone || '').replace(/\D/g, '').substring(0, 2),
+          telefone: String(order.customer_phone || order.shipping_address?.phone || '').replace(/\D/g, '').substring(2, 11),
         },
         documentosFiscais: [
           {
@@ -103,6 +108,18 @@ serve(async (req) => {
           result = JSON.parse(resultText);
         } catch (e) {
           result = { raw: resultText };
+        }
+
+        if (response.ok && (result.protocolo || result.id)) {
+          const protocol = result.protocolo || result.id;
+          // Salvar o protocolo no pedido
+          await supabase
+            .from("orders")
+            .update({ 
+              tracking_number: protocol,
+              shipping_label_id: protocol 
+            })
+            .eq("id", order.id);
         }
 
         return new Response(JSON.stringify({ 

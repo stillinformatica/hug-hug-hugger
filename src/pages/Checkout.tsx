@@ -186,6 +186,7 @@ const Checkout = () => {
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [customerCpf, setCustomerCpf] = useState("");
   const [addressNumber, setAddressNumber] = useState("");
   const [addressComplement, setAddressComplement] = useState("");
 
@@ -202,8 +203,8 @@ const Checkout = () => {
   const shippingPrice = shippingOptions.find((o) => o.id === selectedShipping)?.price || 0;
   const totalPrice = subtotal + shippingPrice;
 
-  const paymentRequirementsMessage = !customerName || !customerEmail
-    ? "Preencha nome e e-mail para continuar"
+  const paymentRequirementsMessage = !customerName || !customerEmail || !customerCpf
+    ? "Preencha nome, e-mail e CPF para continuar"
     : !addressInfo
       ? "Busque seu CEP para calcular o frete"
       : !addressNumber
@@ -263,6 +264,7 @@ const Checkout = () => {
         name: customerName,
         email: customerEmail,
         phone: customerPhone.replace(/\D/g, ""),
+        cpf: customerCpf.replace(/\D/g, ""),
       },
       shipping: addressInfo
         ? {
@@ -273,6 +275,8 @@ const Checkout = () => {
             city: addressInfo.city,
             region_code: addressInfo.state,
             postal_code: cep.replace(/\D/g, ""),
+            cpf: customerCpf.replace(/\D/g, ""),
+            phone: customerPhone.replace(/\D/g, ""),
           }
         : null,
       items: items.map((item) => ({
@@ -283,7 +287,7 @@ const Checkout = () => {
       })),
       totalAmount: totalPrice,
     };
-  }, [customerName, customerEmail, customerPhone, addressInfo, addressNumber, addressComplement, cep, items, totalPrice]);
+  }, [customerName, customerEmail, customerPhone, customerCpf, addressInfo, addressNumber, addressComplement, cep, items, totalPrice]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -671,9 +675,15 @@ const Checkout = () => {
                       <Input id="email" type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} placeholder="seu@email.com" />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Telefone</Label>
-                    <Input id="phone" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="(11) 99999-9999" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="phone">Telefone</Label>
+                      <Input id="phone" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="(11) 99999-9999" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="cpf">CPF *</Label>
+                      <Input id="cpf" value={customerCpf} onChange={(e) => setCustomerCpf(e.target.value)} placeholder="000.000.000-00" />
+                    </div>
                   </div>
                 </CardContent>
               </Card>

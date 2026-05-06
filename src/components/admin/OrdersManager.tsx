@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Loader2, Save, Search, Package, CheckCircle2, Truck, ExternalLink } from "lucide-react";
+import { Loader2, Save, Search, Package, CheckCircle2, Truck, ExternalLink, Ticket } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface Order {
@@ -17,12 +17,14 @@ interface Order {
   total_amount: number;
   created_at: string;
   tracking_number?: string;
+  items?: any[];
 }
 
 const OrdersManager = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [generatingLabelId, setGeneratingLabelId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
   const fetchOrders = async () => {
@@ -35,7 +37,7 @@ const OrdersManager = () => {
     if (error) {
       toast.error("Erro ao carregar pedidos");
     } else {
-      setOrders(data || []);
+      setOrders(data as Order[] || []);
     }
     setLoading(false);
   };
@@ -43,6 +45,32 @@ const OrdersManager = () => {
   useEffect(() => {
     fetchOrders();
   }, []);
+
+  const handleGenerateLabel = async (order: Order) => {
+    setGeneratingLabelId(order.id);
+    try {
+      const { data, error } = await supabase.functions.invoke("calculate-shipping", {
+        body: { 
+          action: "register_collection",
+          order: order 
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast.success(`Etiqueta gerada! Protocolo: ${data.protocol}`);
+        fetchOrders();
+      } else {
+        toast.error(`Erro: ${data.data?.message || data.error || 'Falha na comunicação'}`);
+      }
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Erro ao gerar etiqueta: " + (err.message || "Tente novamente"));
+    } finally {
+      setGeneratingLabelId(null);
+    }
+  };
 
   const handleUpdateStatus = async (orderId: string, currentStatus: string, email: string, name: string, ref: string) => {
     let nextStatus = "";
@@ -66,7 +94,7 @@ const OrdersManager = () => {
         </div>
       `;
     } else {
-      return; // Outros status não implementados para transição manual simples aqui
+      return; 
     }
 
     setUpdatingId(orderId);
@@ -78,7 +106,6 @@ const OrdersManager = () => {
 
       if (error) throw error;
 
-      // Enviar e-mail de notificação
       await supabase.functions.invoke("send-email", {
         body: {
           to: email,
@@ -152,23 +179,41 @@ const OrdersManager = () => {
                   <p className="text-xs text-muted-foreground">
                     {new Date(order.created_at).toLocaleString('pt-BR')}
                   </p>
+                  {order.tracking_number && (
+                    <p className="text-xs font-mono bg-blue-50 text-blue-700 p-1 px-2 rounded inline-block mt-1">
+                      Protocolo: {order.tracking_number}
+                    </p>
+                  )}
                 </div>
 
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-right mr-2">
                     <p className="text-sm font-bold text-primary">R$ {order.total_amount.toFixed(2).replace(".", ",")}</p>
                   </div>
                   
                   {order.status === "PAID" && (
-                    <Button 
-                      size="sm" 
-                      onClick={() => handleUpdateStatus(order.id, order.status, order.customer_email, order.customer_name, order.reference_id)}
-                      disabled={updatingId === order.id}
-                      className="gap-2"
-                    >
-                      {updatingId === order.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
-                      Marcar como Enviado
-                    </Button>
+                    <>
+                      <Button 
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleGenerateLabel(order)}
+                        disabled={generatingLabelId === order.id}
+                        className="gap-2 border-primary text-primary hover:bg-primary/5"
+                      >
+                        {generatingLabelId === order.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ticket className="h-4 w-4" />}
+                        Gerar Etiqueta
+                      </Button>
+                      
+                      <Button 
+                        size="sm" 
+                        onClick={() => handleUpdateStatus(order.id, order.status, order.customer_email, order.customer_name, order.reference_id)}
+                        disabled={updatingId === order.id}
+                        className="gap-2"
+                      >
+                        {updatingId === order.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
+                        Marcar como Enviado
+                      </Button>
+                    </>
                   )}
                   
                   {order.status === "SHIPPED" && (
