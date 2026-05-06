@@ -97,8 +97,10 @@ export type Database = {
           pagbank_id: string | null
           reference_id: string
           shipping_address: Json | null
+          shipping_label_id: string | null
           status: string
           total_amount: number
+          tracking_number: string | null
           updated_at: string
         }
         Insert: {
@@ -111,8 +113,10 @@ export type Database = {
           pagbank_id?: string | null
           reference_id: string
           shipping_address?: Json | null
+          shipping_label_id?: string | null
           status?: string
           total_amount?: number
+          tracking_number?: string | null
           updated_at?: string
         }
         Update: {
@@ -125,8 +129,10 @@ export type Database = {
           pagbank_id?: string | null
           reference_id?: string
           shipping_address?: Json | null
+          shipping_label_id?: string | null
           status?: string
           total_amount?: number
+          tracking_number?: string | null
           updated_at?: string
         }
         Relationships: []
