@@ -8,7 +8,6 @@ const corsHeaders = {
 const TOTAL_EXPRESS_USER = Deno.env.get("TOTAL_EXPRESS_USER");
 const TOTAL_EXPRESS_PASSWORD = Deno.env.get("TOTAL_EXPRESS_PASSWORD");
 const TOTAL_EXPRESS_REID = Deno.env.get("TOTAL_EXPRESS_REID");
-// QuotaGuard URL removed as requested for free tier
 const ORIGIN_CEP = "07063-000";
 
 serve(async (req) => {
@@ -20,95 +19,111 @@ serve(async (req) => {
     const body = await req.json();
     const { action, order, postal_code, items } = body;
 
-    // Se a ação for registrar coleta (pós-pagamento)
+    // Se a ação for registrar coleta (Smart Label REST API)
     if (action === "register_collection" && order) {
-      console.log("Iniciando Registro de Coleta na Total Express para o pedido:", order.id);
+      console.log("Iniciando Registro de Coleta (Smart Label REST) na Total Express para o pedido:", order.id);
       
       const itemsList = order.order_items || [];
       const totalVolumes = itemsList.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0);
       const totalWeight = itemsList.reduce((acc: number, item: any) => acc + (Number(item.weight || 0.5) * (item.quantity || 1)), 0);
       const totalValue = Number(order.total_amount || 0);
-      
-      // Construir XML de RegistraColeta baseado no layout detalhado v24
-      const registerXml = `<?xml version="1.0" encoding="utf-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="urn:RegistraColeta">
-   <soapenv:Header/>
-   <soapenv:Body>
-      <urn:RegistraColeta>
-         <RegistraColetaRequest>
-            <Encomendas>
-               <item>
-                  <TipoServico>1</TipoServico>
-                  <TipoEntrega>0</TipoEntrega>
-                  <Peso>${totalWeight.toFixed(2)}</Peso>
-                  <Volumes>${totalVolumes}</Volumes>
-                  <CondFrete>CIF</CondFrete>
-                  <Pedido>${(order.reference_id || order.id).substring(0, 20)}</Pedido>
-                  <Natureza>Produtos de Informatica</Natureza>
-                  <IsencaoIcms>0</IsencaoIcms>
-                  <DestNome>${(order.customer_name || 'Cliente').substring(0, 40)}</DestNome>
-                  <DestCpfCnpj>${(order.customer_cpf || '').replace(/\D/g, '').substring(0, 14)}</DestCpfCnpj>
-                  <DestEnd>${(order.shipping_address || '').substring(0, 80)}</DestEnd>
-                  <DestEndNum>${(order.shipping_number || 'S/N').substring(0, 10)}</DestEndNum>
-                  <DestCompl>${(order.shipping_complement || '').substring(0, 60)}</DestCompl>
-                  <DestBairro>${(order.shipping_neighborhood || '').substring(0, 40)}</DestBairro>
-                  <DestCidade>${(order.shipping_city || '').substring(0, 40)}</DestCidade>
-                  <DestEstado>${(order.shipping_state || '').substring(0, 2)}</DestEstado>
-                  <DestCep>${(order.postal_code || '').replace(/\D/g, '').substring(0, 8)}</DestCep>
-                  <DestEmail>${(order.customer_email || '').substring(0, 60)}</DestEmail>
-                  <DestDdd>${(order.customer_phone || '').replace(/\D/g, '').substring(0, 2)}</DestDdd>
-                  <DestTelefone1>${(order.customer_phone || '').replace(/\D/g, '').substring(2, 11)}</DestTelefone1>
-                  <DocFiscalO>
-                     <item>
-                        <NfoTipo>00</NfoTipo>
-                        <NfoNumero>${(order.reference_id || order.id).replace(/\D/g, '').substring(0, 9)}</NfoNumero>
-                        <NfoData>${new Date().toISOString().split('T')[0]}</NfoData>
-                        <NfoValTotal>${totalValue.toFixed(2)}</NfoValTotal>
-                        <NfoValProd>${totalValue.toFixed(2)}</NfoValProd>
-                     </item>
-                  </DocFiscalO>
-               </item>
-            </Encomendas>
-         </RegistraColetaRequest>
-      </urn:RegistraColeta>
-   </soapenv:Body>
-</soapenv:Envelope>`;
 
-      const response = await fetch("https://edi.totalexpress.com.br/webservice24.php", {
-        method: "POST",
-        headers: {
-          "Content-Type": "text/xml; charset=utf-8",
-          "SOAPAction": "urn:RegistraColeta#RegistraColeta",
-          "User-Agent": "Mozilla/5.0"
-        },
-        body: registerXml,
-      });
+      const isProduction = Deno.env.get("TOTAL_EXPRESS_ENV") === "production";
+      const ticketUrl = isProduction 
+        ? "https://apis.totalexpress.com.br/ics-ticket-lv/v1/ticket"
+        : "https://apis-qa.totalexpress.com.br/ics-ticket-lv/v1/ticket";
 
-      const resultText = await response.text();
-      console.log("Total Express Register Response:", resultText);
+      const icsAuth = Deno.env.get("TOTAL_EXPRESS_ICS_AUTH");
 
-      // Extract Protocol Number if success
-      const protocolMatch = resultText.match(/<NumProtocolo.*?>(.*?)<\/NumProtocolo>/);
-      const protocol = protocolMatch ? protocolMatch[1] : null;
-
-      if (protocol) {
-        console.log("Coleta registrada com sucesso. Protocolo:", protocol);
-        // We could also update the order table here to store the protocol
-      } else {
-        console.warn("Possível falha no registro da coleta ou formato inesperado.");
+      if (!icsAuth) {
+        console.error("TOTAL_EXPRESS_ICS_AUTH não configurado.");
+        return new Response(JSON.stringify({ 
+          success: false, 
+          error: "TOKEN_MISSING",
+          message: "O token ICS-Authorization não foi configurado nos Segredos (Cloud -> Secrets)." 
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
-      return new Response(JSON.stringify({ 
-        success: !!protocol, 
-        protocol,
-        raw_result: resultText 
-      }), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      // Mapeamento para o payload JSON do Smart Label (Ticket)
+      const ticketBody = {
+        servicoTipo: 1, // Padrão: 1 (Standard). 7 (Expresso).
+        entregaTipo: 0,
+        peso: totalWeight,
+        volumes: totalVolumes,
+        condicaoFrete: "CIF",
+        pedido: String(order.reference_id || order.id).substring(0, 20),
+        natureza: "Produtos",
+        isencaoIcms: 0,
+        destinatario: {
+          nome: String(order.customer_name || 'Cliente').substring(0, 40),
+          cpfCnpj: String(order.customer_cpf || '').replace(/\D/g, '').substring(0, 14),
+          endereco: String(order.shipping_address || '').substring(0, 80),
+          numero: String(order.shipping_number || 'S/N').substring(0, 10),
+          complemento: String(order.shipping_complement || '').substring(0, 60),
+          bairro: String(order.shipping_neighborhood || '').substring(0, 40),
+          cidade: String(order.shipping_city || '').substring(0, 40),
+          estado: String(order.shipping_state || '').substring(0, 2),
+          cep: String(order.postal_code || '').replace(/\D/g, '').substring(0, 8),
+          email: String(order.customer_email || '').substring(0, 60),
+          ddd: String(order.customer_phone || '').replace(/\D/g, '').substring(0, 2),
+          telefone: String(order.customer_phone || '').replace(/\D/g, '').substring(2, 11),
+        },
+        documentosFiscais: [
+          {
+            tipo: "00", // NF-e
+            numero: String(order.reference_id || order.id).replace(/\D/g, '').substring(0, 9),
+            data: new Date().toISOString().split('T')[0],
+            valorTotal: totalValue,
+            valorProdutos: totalValue
+          }
+        ]
+      };
+
+      try {
+        const response = await fetch(ticketUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "ICS-Authorization": icsAuth,
+            "User-Agent": "Lovable-Integration",
+            "Accept": "application/json",
+            "Connection": "keep-alive"
+          },
+          body: JSON.stringify(ticketBody),
+        });
+
+        const resultText = await response.text();
+        console.log("Resposta Total Express REST:", resultText);
+
+        let result;
+        try {
+          result = JSON.parse(resultText);
+        } catch (e) {
+          result = { raw: resultText };
+        }
+
+        return new Response(JSON.stringify({ 
+          success: response.ok, 
+          data: result,
+          protocol: result.protocolo || result.id || null,
+          raw_response: resultText
+        }), {
+          status: response.status,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      } catch (error) {
+        console.error("Erro na chamada REST Total Express:", error);
+        return new Response(JSON.stringify({ success: false, error: error.message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
-    // BMP Action: Input Validation
+    // Ação: Cálculo de Frete (Permanece SOAP conforme documento)
     if (!postal_code || typeof postal_code !== "string") {
       return new Response(JSON.stringify({ error: "CEP é obrigatório" }), {
         status: 400,
@@ -141,12 +156,8 @@ serve(async (req) => {
       console.warn("CEP fetch failed", e);
     }
 
-    // BMP Action: Weight & Dimensions Calculation
     let totalWeight = 0;
     let totalValue = 0;
-    
-    // We'll calculate a bounding box or sum of volumes for Total Express
-    // For simplicity with multiple items, we'll sum weights and use the largest dimensions as a base
     let maxL = 0;
     let maxW = 0;
     let sumH = 0;
@@ -170,20 +181,13 @@ serve(async (req) => {
       sumH = 10;
     }
 
-    // Ensure minimum dimensions for Total Express if needed
     const finalWeight = Math.max(totalWeight, 0.1);
     const finalLength = Math.max(maxL, 15);
     const finalWidth = Math.max(maxW, 15);
     const finalHeight = Math.max(sumH, 2);
 
-    console.log(`Calculating shipping for CEP ${cep}: Weight=${finalWeight}kg, L=${finalLength}, W=${finalWidth}, H=${finalHeight}, Value=${totalValue}`);
+    console.log(`Calculando frete para CEP ${cep}: Peso=${finalWeight}kg, Valor=${totalValue}`);
 
-    // BMP Action: SOAP Request Generation
-    // Note: Some Total Express implementations require Peso, Altura, Largura, Comprimento separately
-    // The current version uses a simplified CalcFrete, but we should check if they need the dimensions.
-    // Based on the manual provided:
-    // Endpoint: https://edi.totalexpress.com.br/webservice24.php?wsdl
-    // SOAP 1.1 UTF-8
     const soapRequest = `<?xml version="1.0" encoding="utf-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:web="urn:TotalExpress">
    <soapenv:Header/>
@@ -204,7 +208,6 @@ serve(async (req) => {
     const totalExpressUrl = "https://edi.totalexpress.com.br/webservice24.php?wsdl";
     let shippingOptions = [];
 
-    // BMP Action: Web Service Integration (Total Express)
     let retries = 0;
     const maxRetries = 2;
     let response;
@@ -212,74 +215,52 @@ serve(async (req) => {
 
     while (retries <= maxRetries) {
       try {
-        console.log(`Fetching from Total Express (Attempt ${retries + 1})...`);
-        
         const fetchOptions: any = {
           method: "POST",
           headers: {
             "Content-Type": "text/xml; charset=utf-8",
             "SOAPAction": "urn:TotalExpress#CalcFrete",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "*/*",
+            "Connection": "keep-alive"
           },
           body: soapRequest,
         };
 
-        // Proxy logic removed to keep project on free tier
-
         response = await fetch(totalExpressUrl, fetchOptions);
-
         xmlText = await response.text();
-        console.log(`Response Status: ${response.status}`);
         
-        if (response.status === 429 || xmlText.includes("Erro 429") || xmlText.includes("Muitas solicitações") || response.status === 403) {
-          console.warn(`Total Express Rate Limit or WAF (Status ${response.status}) hit. Retry ${retries + 1}/${maxRetries}`);
+        if (response.status === 429 || response.status === 403) {
           retries++;
           if (retries <= maxRetries) {
-            const waitTime = 2000 * retries;
-            console.log(`Waiting ${waitTime}ms before retry...`);
-            await new Promise(resolve => setTimeout(resolve, waitTime));
+            await new Promise(resolve => setTimeout(resolve, 2000 * retries));
             continue;
           }
         }
         break;
       } catch (e) {
-        console.error(`Total Express fetch attempt ${retries} failed:`, e);
         retries++;
         if (retries > maxRetries) break;
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
 
-    console.log("Total Express Final Response:", xmlText);
-
     if (xmlText) {
-      // BMP Action: XML Response Processing
-      // Simple XML parsing for the specific fields we need
       const valorFreteMatch = xmlText.match(/<ValorFrete>(.*?)<\/ValorFrete>/);
       const prazoMatch = xmlText.match(/<PrazoEntrega>(.*?)<\/PrazoEntrega>/);
-      const erroMatch = xmlText.match(/<Erro>(.*?)<\/Erro>/);
-      const erroCodMatch = xmlText.match(/<CodigoErro>(.*?)<\/CodigoErro>/);
       
-      const isHtmlError = xmlText.includes("<html") || xmlText.includes("<!DOCTYPE html");
-
       if (valorFreteMatch) {
         shippingOptions.push({
           id: "total_express_exp",
           name: "Total Express (Expresso)",
           price: parseFloat(valorFreteMatch[1].replace(",", ".")),
           currency: "BRL",
-          estimated_days: parseInt(prazoMatch ? prazoMatch[1] : "5") + 2, // adding buffer
+          estimated_days: parseInt(prazoMatch ? prazoMatch[1] : "5") + 2,
           description: "Entrega via Total Express",
         });
-      } else if (isHtmlError) {
-        console.warn("Total Express returned HTML (likely Rate Limit or WAF error)");
-      } else if (erroMatch && erroCodMatch && erroCodMatch[1] !== "0") {
-        console.warn(`Total Express API Error ${erroCodMatch[1]}: ${erroMatch[1]}`);
-        throw new Error(`Total Express: ${erroMatch[1]}`);
       }
     }
 
-    // BMP Action: Result Delivery (JSON Response)
     if (shippingOptions.length === 0) {
       shippingOptions.push({
         id: "standard_shipping",
@@ -301,7 +282,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("Shipping calculation error:", error);
+    console.error("Erro no cálculo de frete:", error);
     return new Response(JSON.stringify({ error: "Erro ao calcular frete" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
