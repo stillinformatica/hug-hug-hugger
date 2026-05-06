@@ -17,7 +17,7 @@ interface Order {
   total_amount: number;
   created_at: string;
   tracking_number?: string;
-  order_items?: any[];
+  items?: any[];
 }
 
 const OrdersManager = () => {
@@ -31,13 +31,13 @@ const OrdersManager = () => {
     setLoading(true);
     const { data, error } = await supabase
       .from("orders")
-      .select("*, order_items(*)")
+      .select("*")
       .order("created_at", { ascending: false });
     
     if (error) {
       toast.error("Erro ao carregar pedidos");
     } else {
-      setOrders(data || []);
+      setOrders(data as Order[] || []);
     }
     setLoading(false);
   };
