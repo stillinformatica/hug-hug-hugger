@@ -1,0 +1,14 @@
+CREDENCIAIS TOTAL EXPRESS
+
+Usuário: 84216stillin-prod
+Senha: (A senha que você inseriu no formulário)
+REID: 84216
+
+STATUS DO TESTE
+Data/Hora: 2026-05-06 12:24 UTC
+Resultado: Acesso Negado!
+Mensagem: "Acesso Negado! Seu IP foi arquivado para controle: 18.153.107.49"
+
+AÇÕES NECESSÁRIAS
+1. Confirmar se a senha inserida no formulário está exatamente como fornecida pela Total Express.
+2. Solicitar ao suporte da Total Express a liberação (whitelist) do IP 18.153.107.49 ou da faixa de IPs de saída do servidor.
