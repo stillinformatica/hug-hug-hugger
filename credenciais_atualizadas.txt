@@ -1,0 +1,12 @@
+CREDENCIAIS ATUALIZADAS - TOTAL EXPRESS
+
+Usuário (User): 84216stillin-prod
+Senha (Password): uo43MPUm
+REID: 84216
+
+STATUS DO ÚLTIMO TESTE:
+IP do Servidor: 18.153.107.49
+Resposta: Acesso Negado (Firewall)
+
+OBSERVAÇÃO:
+As credenciais acima foram configuradas no sistema. O erro de "Acesso Negado" indica que o firewall da Total Express precisa liberar o IP do servidor para que a conexão seja permitida.
