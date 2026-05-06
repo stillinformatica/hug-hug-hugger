@@ -81,6 +81,7 @@ serve(async (req) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
+            "Authorization": `Basic ${icsAuth}`,
             "ICS-Authorization": icsAuth,
             "User-Agent": "Lovable-Integration",
             "Accept": "application/json",
