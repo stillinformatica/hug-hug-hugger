@@ -287,7 +287,7 @@ const Checkout = () => {
       })),
       totalAmount: totalPrice,
     };
-  }, [customerName, customerEmail, customerPhone, addressInfo, addressNumber, addressComplement, cep, items, totalPrice]);
+  }, [customerName, customerEmail, customerPhone, customerCpf, addressInfo, addressNumber, addressComplement, cep, items, totalPrice]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
