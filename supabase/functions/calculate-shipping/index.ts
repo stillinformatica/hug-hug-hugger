@@ -38,8 +38,8 @@ serve(async (req) => {
         ? "https://apis.totalexpress.com.br/ics-ticket-lv/v1/ticket"
         : "https://apis-qa.totalexpress.com.br/ics-ticket-lv/v1/ticket";
 
-      // Autenticação Básica (Base64 de usuario:senha)
-      const basicAuth = btoa(`${TOTAL_EXPRESS_USER}:${TOTAL_EXPRESS_PASSWORD}`);
+      // Autenticação ICS (usuario:senha em Base64 conforme especificação ICS)
+      const icsAuth = btoa(`${TOTAL_EXPRESS_USER}:${TOTAL_EXPRESS_PASSWORD}`);
 
       // Mapeamento para o payload JSON do Smart Label (Ticket)
       const ticketBody = {
@@ -81,7 +81,7 @@ serve(async (req) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "Authorization": `Basic ${basicAuth}`,
+            "ICS-Authorization": icsAuth,
             "User-Agent": "Lovable-Integration",
             "Accept": "application/json",
             "Connection": "keep-alive"
