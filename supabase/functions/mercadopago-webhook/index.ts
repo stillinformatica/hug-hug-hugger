@@ -130,7 +130,7 @@ serve(async (req) => {
         try {
           const { data: orderData } = await supabase
             .from("orders")
-            .select("*, order_items(*)")
+            .select("*")
             .eq("reference_id", referenceId)
             .single();
 
