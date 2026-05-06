@@ -38,18 +38,53 @@ serve(async (req) => {
         ? "https://apis.totalexpress.com.br/ics-ticket-lv/v1/ticket"
         : "https://apis-qa.totalexpress.com.br/ics-ticket-lv/v1/ticket";
 
-      const icsAuth = Deno.env.get("TOTAL_EXPRESS_ICS_AUTH");
+      const authUrl = isProduction
+        ? "https://apis.totalexpress.com.br/ics-ticket-lv/v1/auth"
+        : "https://apis-qa.totalexpress.com.br/ics-ticket-lv/v1/auth";
 
+      let icsAuth = Deno.env.get("TOTAL_EXPRESS_ICS_AUTH");
+
+      // Se não tiver token, tenta gerar um usando usuário e senha
       if (!icsAuth) {
-        console.error("TOTAL_EXPRESS_ICS_AUTH não configurado.");
-        return new Response(JSON.stringify({ 
-          success: false, 
-          error: "TOKEN_MISSING",
-          message: "O token ICS-Authorization não foi configurado nos Segredos (Cloud -> Secrets)." 
-        }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+        console.log("Tentando gerar token ICS-Authorization...");
+        try {
+          const authResponse = await fetch(authUrl, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "User-Agent": "Lovable-Integration",
+              "Accept": "application/json"
+            },
+            body: JSON.stringify({
+              usuario: TOTAL_EXPRESS_USER,
+              senha: TOTAL_EXPRESS_PASSWORD
+            }),
+          });
+
+          const authResult = await authResponse.json();
+          console.log("Resposta Auth Total Express:", authResult);
+
+          if (authResponse.ok && authResult.token) {
+            icsAuth = authResult.token;
+          } else {
+            console.error("Falha na autenticação Total Express:", authResult);
+            return new Response(JSON.stringify({ 
+              success: false, 
+              error: "AUTH_FAILED",
+              message: "Não foi possível gerar o token de acesso com as credenciais fornecidas.",
+              details: authResult
+            }), {
+              status: 401,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+        } catch (authError) {
+          console.error("Erro ao autenticar na Total Express:", authError);
+          return new Response(JSON.stringify({ success: false, error: "AUTH_ERROR", message: authError.message }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
       }
 
       // Mapeamento para o payload JSON do Smart Label (Ticket)
@@ -92,7 +127,7 @@ serve(async (req) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "ICS-Authorization": icsAuth,
+            "ICS-Authorization": icsAuth!,
             "User-Agent": "Lovable-Integration",
             "Accept": "application/json",
             "Connection": "keep-alive"
