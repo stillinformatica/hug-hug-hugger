@@ -203,8 +203,8 @@ const Checkout = () => {
   const shippingPrice = shippingOptions.find((o) => o.id === selectedShipping)?.price || 0;
   const totalPrice = subtotal + shippingPrice;
 
-  const paymentRequirementsMessage = !customerName || !customerEmail
-    ? "Preencha nome e e-mail para continuar"
+  const paymentRequirementsMessage = !customerName || !customerEmail || !customerCpf
+    ? "Preencha nome, e-mail e CPF para continuar"
     : !addressInfo
       ? "Busque seu CEP para calcular o frete"
       : !addressNumber
