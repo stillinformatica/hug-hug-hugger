@@ -38,54 +38,8 @@ serve(async (req) => {
         ? "https://apis.totalexpress.com.br/ics-ticket-lv/v1/ticket"
         : "https://apis-qa.totalexpress.com.br/ics-ticket-lv/v1/ticket";
 
-      const authUrl = isProduction
-        ? "https://apis.totalexpress.com.br/ics-ticket-lv/v1/auth"
-        : "https://apis-qa.totalexpress.com.br/ics-ticket-lv/v1/auth";
-
-      let icsAuth = Deno.env.get("TOTAL_EXPRESS_ICS_AUTH");
-
-      // Se não tiver token, tenta gerar um usando usuário e senha
-      if (!icsAuth) {
-        console.log("Tentando gerar token ICS-Authorization...");
-        try {
-          const authResponse = await fetch(authUrl, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "User-Agent": "Lovable-Integration",
-              "Accept": "application/json"
-            },
-            body: JSON.stringify({
-              usuario: TOTAL_EXPRESS_USER,
-              senha: TOTAL_EXPRESS_PASSWORD
-            }),
-          });
-
-          const authResult = await authResponse.json();
-          console.log("Resposta Auth Total Express:", authResult);
-
-          if (authResponse.ok && authResult.token) {
-            icsAuth = authResult.token;
-          } else {
-            console.error("Falha na autenticação Total Express:", authResult);
-            return new Response(JSON.stringify({ 
-              success: false, 
-              error: "AUTH_FAILED",
-              message: "Não foi possível gerar o token de acesso com as credenciais fornecidas.",
-              details: authResult
-            }), {
-              status: 401,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-          }
-        } catch (authError) {
-          console.error("Erro ao autenticar na Total Express:", authError);
-          return new Response(JSON.stringify({ success: false, error: "AUTH_ERROR", message: authError.message }), {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-      }
+      // Autenticação Básica (Base64 de usuario:senha)
+      const basicAuth = btoa(`${TOTAL_EXPRESS_USER}:${TOTAL_EXPRESS_PASSWORD}`);
 
       // Mapeamento para o payload JSON do Smart Label (Ticket)
       const ticketBody = {
@@ -104,7 +58,7 @@ serve(async (req) => {
           numero: String(order.shipping_address?.number || 'S/N').substring(0, 10),
           complemento: String(order.shipping_address?.complement || '').substring(0, 60),
           bairro: String(order.shipping_address?.locality || order.shipping_address?.neighborhood || '').substring(0, 40),
-          cidade: String(order.shipping_address?.city || '').substring(0, 40),
+          city: String(order.shipping_address?.city || '').substring(0, 40),
           estado: String(order.shipping_address?.region_code || order.shipping_address?.state || '').substring(0, 2),
           cep: String(order.shipping_address?.postal_code || order.postal_code || '').replace(/\D/g, '').substring(0, 8),
           email: String(order.customer_email || '').substring(0, 60),
@@ -127,7 +81,7 @@ serve(async (req) => {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "ICS-Authorization": icsAuth!,
+            "Authorization": `Basic ${basicAuth}`,
             "User-Agent": "Lovable-Integration",
             "Accept": "application/json",
             "Connection": "keep-alive"
