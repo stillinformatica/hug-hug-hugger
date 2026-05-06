@@ -28,7 +28,7 @@ serve(async (req) => {
       const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-      const itemsList = order.order_items || [];
+      const itemsList = order.items || order.order_items || [];
       const totalVolumes = itemsList.reduce((acc: number, item: any) => acc + (item.quantity || 1), 0);
       const totalWeight = itemsList.reduce((acc: number, item: any) => acc + (Number(item.weight || 0.5) * (item.quantity || 1)), 0);
       const totalValue = Number(order.total_amount || 0);
