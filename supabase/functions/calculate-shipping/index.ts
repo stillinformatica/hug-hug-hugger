@@ -49,7 +49,7 @@ serve(async (req) => {
 
       // Mapeamento para o payload JSON do Smart Label (Ticket)
       const ticketBody = {
-        servicoTipo: 1, // Padrão: 1 (Standard). 7 (Expresso).
+        servicoTipo: 7, // Expresso (7) para coincidir com a consulta EXP.
         entregaTipo: 0,
         peso: totalWeight,
         volumes: totalVolumes,
