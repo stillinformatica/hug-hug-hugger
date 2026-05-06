@@ -264,6 +264,7 @@ const Checkout = () => {
         name: customerName,
         email: customerEmail,
         phone: customerPhone.replace(/\D/g, ""),
+        cpf: customerCpf.replace(/\D/g, ""),
       },
       shipping: addressInfo
         ? {
@@ -274,6 +275,8 @@ const Checkout = () => {
             city: addressInfo.city,
             region_code: addressInfo.state,
             postal_code: cep.replace(/\D/g, ""),
+            cpf: customerCpf.replace(/\D/g, ""),
+            phone: customerPhone.replace(/\D/g, ""),
           }
         : null,
       items: items.map((item) => ({
