@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 
 interface ShippingOption {
@@ -243,7 +244,6 @@ const Checkout = () => {
       setShippingOptions(data.shipping_options);
       setSelectedShipping(data.shipping_options[0]?.id || null);
 
-      // Verificação explícita de erro da Total Express baseado no retorno
       if (data.shipping_options.length === 1 && data.shipping_options[0].id === "standard_shipping") {
         setShippingError("A Total Express retornou 'Acesso Negado! Seu IP foi arquivado'. O suporte da transportadora precisa liberar o acesso para servidores em nuvem.");
       }
@@ -257,7 +257,6 @@ const Checkout = () => {
     }
   };
 
-  // Mantém os dados atualizados em ref para o callback do Brick
   useEffect(() => {
     checkoutDataRef.current = {
       customer: {
@@ -364,7 +363,6 @@ const Checkout = () => {
     }
   };
 
-  // Inicializa o Payment Brick quando o usuário clica em "Pagar"
   useEffect(() => {
     if (!showBrick) return;
     let cancelled = false;
@@ -372,7 +370,6 @@ const Checkout = () => {
     const init = async () => {
       setBrickLoading(true);
       try {
-        // Validações que travam o Brick silenciosamente
         if (!customerEmail || !/^\S+@\S+\.\S+$/.test(customerEmail)) {
           throw new Error("E-mail inválido. Volte e preencha um e-mail válido.");
         }
@@ -389,7 +386,6 @@ const Checkout = () => {
         const publicKey = keyData?.public_key;
         if (!publicKey) throw new Error("Chave pública do Mercado Pago não configurada");
         
-        // Verifica se a chave pública parece ser um token de acesso (erro comum)
         if (publicKey.length > 60 && publicKey.startsWith("APP_USR-")) {
           console.error("[MP Brick] A chave pública parece ser um Token de Acesso. Verifique as configurações.");
           throw new Error("A chave pública configurada parece ser um Token de Acesso. Por favor, verifique se você não inverteu o Public Key e o Access Token nas configurações.");
@@ -399,7 +395,6 @@ const Checkout = () => {
 
         if (cancelled) return;
 
-        // Aguarda o container existir no DOM (React pode não ter commitado ainda)
         let container: HTMLElement | null = null;
         for (let i = 0; i < 50; i++) {
           container = document.getElementById("mp-payment-brick");
@@ -414,7 +409,6 @@ const Checkout = () => {
         const bricksBuilder = mp.bricks();
 
         let readyResolved = false;
-        // Fallback: se onReady não disparar em 4s mas o container já tem conteúdo, esconde o loader
         const readyFallback = window.setTimeout(() => {
           if (!readyResolved && container && container.children.length > 0) {
             readyResolved = true;
@@ -524,7 +518,6 @@ const Checkout = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showBrick]);
 
-  // Tela de resultado do pagamento (sem redirect — direto na página)
   if (paymentResult) {
     const isSuccess = paymentResult.status === "approved";
     const isPending = paymentResult.status === "pending" || paymentResult.status === "in_process";
@@ -727,7 +720,7 @@ const Checkout = () => {
                   {shippingError && (
                     <div className="p-3 bg-destructive/10 border border-destructive/20 rounded-xl text-sm text-destructive">
                       <p className="font-medium flex items-center gap-2">
-                        <XCircle className="h-4 w-4" /> Erro na Integração Total Express
+                        <XCircle className="h-4 w-4" /> Erro na Consulta de Frete
                       </p>
                       <p className="mt-1 opacity-90">{shippingError}</p>
                     </div>
@@ -736,27 +729,51 @@ const Checkout = () => {
                   {shippingOptions.length > 0 && (
                     <div className="space-y-2">
                       <Label className="flex items-center gap-2"><Truck className="h-4 w-4" /> Opções de Envio</Label>
-                      {shippingOptions.map((option) => (
-                        <button
-                          key={option.id}
-                          onClick={() => setSelectedShipping(option.id)}
-                          className={`w-full p-3 rounded-xl border text-left transition-colors ${
-                            selectedShipping === option.id
-                              ? "border-primary bg-primary/5"
-                              : "border-border hover:border-primary/50"
-                          }`}
-                        >
-                          <div className="flex justify-between items-center">
-                            <div>
-                              <p className="font-medium text-foreground text-sm">{option.name}</p>
-                              <p className="text-xs text-muted-foreground">{option.estimated_days} dias úteis</p>
+                      {shippingOptions.map((option) => {
+                        const isMercadoEnvios = option.name.toLowerCase().includes("mercado envios") || option.description.toLowerCase().includes("mercado envios");
+                        const isTotalExpress = option.name.toLowerCase().includes("total express") || option.description.toLowerCase().includes("total express");
+                        
+                        return (
+                          <button
+                            key={option.id}
+                            onClick={() => setSelectedShipping(option.id)}
+                            className={`w-full p-4 rounded-xl border text-left transition-all duration-200 ${
+                              selectedShipping === option.id
+                                ? "border-primary bg-primary/5 ring-1 ring-primary"
+                                : "border-border hover:border-primary/50 hover:bg-secondary/20"
+                            }`}
+                          >
+                            <div className="flex justify-between items-start gap-4">
+                              <div className="space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <p className="font-semibold text-foreground text-sm">{option.name}</p>
+                                  {isMercadoEnvios && (
+                                    <Badge variant="outline" className="bg-[#FFE600] text-[#2D3277] border-none font-bold text-[10px] px-1.5 h-5">
+                                      MERCADO ENVIOS
+                                    </Badge>
+                                  )}
+                                  {isTotalExpress && (
+                                    <Badge variant="outline" className="bg-blue-600 text-white border-none font-bold text-[10px] px-1.5 h-5">
+                                      TOTAL EXPRESS
+                                    </Badge>
+                                  )}
+                                </div>
+                                <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                  <Clock className="h-3 w-3" /> {option.estimated_days} dias úteis
+                                </p>
+                                {option.description && (
+                                  <p className="text-[10px] text-muted-foreground/80">{option.description}</p>
+                                )}
+                              </div>
+                              <div className="text-right">
+                                <span className="font-bold text-primary text-base">
+                                  {option.price === 0 ? "GRÁTIS" : `R$ ${option.price.toFixed(2)}`}
+                                </span>
+                              </div>
                             </div>
-                            <span className="font-bold text-primary text-sm">
-                              {option.price === 0 ? "GRÁTIS" : `R$ ${option.price.toFixed(2)}`}
-                            </span>
-                          </div>
-                        </button>
-                      ))}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>
