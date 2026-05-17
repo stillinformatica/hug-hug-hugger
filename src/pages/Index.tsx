@@ -23,7 +23,7 @@ const Index = () => {
       <StoreHeader searchQuery={searchQuery} onSearchChange={setSearchQuery} />
       <HeroBanner />
 
-      <main className="flex-1 max-w-7xl mx-auto px-4 py-8 w-full">
+      <main className="flex-1 max-w-[1600px] mx-auto px-4 py-8 w-full">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-foreground">
             {searchQuery ? `Resultados para "${searchQuery}"` : "Todos os Produtos"}

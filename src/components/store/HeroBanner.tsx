@@ -3,7 +3,7 @@ import bannerDesktop from "@/assets/banner-desktop.jpg";
 
 export const HeroBanner = () => {
   return (
-    <section className="w-full max-w-7xl mx-auto px-4 mt-4">
+    <section className="w-full max-w-[1600px] mx-auto px-4 mt-4">
       <div className="w-full rounded-2xl overflow-hidden">
         <picture>
           <source media="(min-width: 768px)" srcSet={bannerDesktop} />
