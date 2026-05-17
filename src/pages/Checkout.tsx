@@ -640,7 +640,7 @@ const Checkout = () => {
     <div className="min-h-screen bg-background flex flex-col">
       <StoreHeader searchQuery={searchQuery} onSearchChange={setSearchQuery} />
 
-      <main className="flex-1 max-w-5xl mx-auto px-4 py-8 w-full">
+      <main className="flex-1 max-w-[1600px] mx-auto px-4 py-8 w-full">
         <Link to="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary mb-6 transition-colors">
           <ArrowLeft className="h-4 w-4" /> Continuar comprando
         </Link>
