@@ -36,7 +36,7 @@ export const StoreHeader = ({ searchQuery, onSearchChange }: StoreHeaderProps) =
 
   return (
     <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
-      <div className="max-w-7xl mx-auto px-4">
+      <div className="max-w-[1600px] mx-auto px-4">
         <div className="flex items-center justify-between h-16 gap-4">
           <Link to="/" className="flex items-center gap-3 shrink-0">
             <img src={logo} alt="Still Informática" className="h-10 w-10 rounded-lg object-cover" />
