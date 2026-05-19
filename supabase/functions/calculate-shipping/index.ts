@@ -125,7 +125,7 @@ serve(async (req) => {
     }
 
     // ────────────────────────────────────────────────────────────────
-    // AÇÃO: Cálculo de Frete via Frenet
+    // AÇÃO: Cálculo de Frete via Total Express (SOAP API)
     // ────────────────────────────────────────────────────────────────
     if (!postal_code || typeof postal_code !== "string") {
       return new Response(JSON.stringify({ error: "CEP é obrigatório" }), {
@@ -142,93 +142,145 @@ serve(async (req) => {
       });
     }
 
-    // Busca endereço pelo CEP
-    let addressInfo = { street: "", neighborhood: "", city: "", state: "" };
-    try {
-      const cepResponse = await fetch(`https://brasilapi.com.br/api/cep/v2/${cep}`);
-      if (cepResponse.ok) {
-        const j = await cepResponse.json();
-        addressInfo = {
-          street: j.street || "",
-          neighborhood: j.neighborhood || "",
-          city: j.city || "",
-          state: j.state || "",
-        };
-      }
-    } catch (e) {
-      console.warn("CEP fetch failed", e);
-    }
+    const TOTAL_EXPRESS_USER = Deno.env.get("TOTAL_EXPRESS_USER");
+    const TOTAL_EXPRESS_PASSWORD = Deno.env.get("TOTAL_EXPRESS_PASSWORD");
+    const TOTAL_EXPRESS_REID = Deno.env.get("TOTAL_EXPRESS_REID") || "0";
 
-    // Monta array de itens para a Frenet
-    let itemsArray: any[] = [];
-    let totalValue = 0;
-
-    if (items && items.length > 0) {
-      items.forEach((item: any) => {
-        const qty = item.quantity || 1;
-        totalValue += (Number(item.price) || 0) * qty;
-        itemsArray.push({
-          Weight: Number(item.weight) || 0.5,
-          Length: Number(item.length) || 15,
-          Width: Number(item.width) || 15,
-          Height: Number(item.height) || 10,
-          Quantity: qty
-        });
-      });
-    } else {
-      totalValue = 100;
-      itemsArray.push({ Weight: 0.5, Length: 15, Width: 15, Height: 10, Quantity: 1 });
-    }
-
-    const frenetBody = {
-      SellerCEP: ORIGIN_CEP,
-      RecipientCEP: cep,
-      ShipmentInvoiceValue: totalValue,
-      ShippingItemArray: itemsArray
-    };
-
-    console.log(`Calculando frete via Frenet para CEP ${cep}: Valor=${totalValue}`);
-
-    const FRENET_TOKEN = Deno.env.get("FRENET_TOKEN");
     let shippingOptions: any[] = [];
 
-    if (FRENET_TOKEN) {
+    if (TOTAL_EXPRESS_USER && TOTAL_EXPRESS_PASSWORD) {
       try {
-        const frenetResponse = await fetch("https://api.frenet.com.br/shipping/quote", {
+        console.log(`Calculando frete via Total Express para CEP ${cep}`);
+        
+        let totalWeight = 0;
+        let totalValue = 0;
+        if (items && items.length > 0) {
+          items.forEach((item: any) => {
+            const qty = item.quantity || 1;
+            totalValue += (Number(item.price) || 0) * qty;
+            totalWeight += (Number(item.weight) || 0.5) * qty;
+          });
+        } else {
+          totalValue = 100;
+          totalWeight = 0.5;
+        }
+
+        // SOAP Request for Total Express
+        const soapRequest = `<?xml version="1.0" encoding="utf-8"?>
+<soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <calcularFrete xmlns="http://edi.totalexpress.com.br/webservice_calculo_frete.php">
+      <reid>${TOTAL_EXPRESS_REID}</reid>
+      <cep>${cep}</cep>
+      <peso>${totalWeight.toFixed(2)}</peso>
+      <valor>${totalValue.toFixed(2)}</valor>
+    </calcularFrete>
+  </soap:Body>
+</soap:Envelope>`;
+
+        const auth = btoa(`${TOTAL_EXPRESS_USER}:${TOTAL_EXPRESS_PASSWORD}`);
+        const response = await fetch("https://edi.totalexpress.com.br/webservice_calculo_frete.php", {
           method: "POST",
           headers: {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "token": FRENET_TOKEN
+            "Content-Type": "text/xml; charset=utf-8",
+            "Authorization": `Basic ${auth}`,
+            "SOAPAction": "http://edi.totalexpress.com.br/webservice_calculo_frete.php#calcularFrete"
           },
-          body: JSON.stringify(frenetBody),
+          body: soapRequest
         });
 
-        const data = await frenetResponse.json();
-        console.log("Frenet Response:", JSON.stringify(data));
+        const xmlResponse = await response.text();
+        console.log("Total Express SOAP Response:", xmlResponse);
 
-        if (data.ShippingSevicesArray && data.ShippingSevicesArray.length > 0) {
-          shippingOptions = data.ShippingSevicesArray
-            .filter((s: any) => !s.Error)
-            .map((s: any) => ({
-              id: `frenet_${s.ServiceCode}`,
-              name: s.ServiceDescription,
-              carrier: s.Carrier,
-              carrier_code: s.CarrierCode,
-              price: parseFloat(s.ShippingPrice),
-              currency: "BRL",
-              estimated_days: parseInt(s.DeliveryTime) + 2,
-              description: `Entrega via ${s.Carrier}`,
-            }));
+        // Parsing simples do XML de resposta (Regex para evitar dependências pesadas)
+        const priceMatch = xmlResponse.match(/<ValorFrete>([\d,.]+)<\/ValorFrete>/);
+        const deadlineMatch = xmlResponse.match(/<Prazo>(\d+)<\/Prazo>/);
+        const nameMatch = xmlResponse.match(/<DescricaoServico>([^<]+)<\/DescricaoServico>/);
+
+        if (priceMatch) {
+          const price = parseFloat(priceMatch[1].replace(",", "."));
+          const days = deadlineMatch ? parseInt(deadlineMatch[1]) : 7;
+          const serviceName = nameMatch ? nameMatch[1] : "Total Express";
+
+          shippingOptions.push({
+            id: "total_express_standard",
+            name: serviceName,
+            carrier: "Total Express",
+            carrier_code: "TEX",
+            price: price,
+            currency: "BRL",
+            estimated_days: days + 2, // Margem de segurança
+            description: `Entrega via Total Express`,
+          });
         }
       } catch (e) {
-        console.error("Erro ao chamar Frenet:", e);
+        console.error("Erro ao chamar Total Express SOAP:", e);
       }
-    } else {
-      console.warn("FRENET_TOKEN não configurado. Usando fallback.");
     }
 
-    // Fallback se a Frenet não retornar nada
+    // Fallback para Frenet se a Total Express falhar ou não estiver configurada
+    if (shippingOptions.length === 0) {
+      console.log("Usando Frenet como fallback...");
+      const FRENET_TOKEN = Deno.env.get("FRENET_TOKEN");
+      if (FRENET_TOKEN) {
+        try {
+          // Re-calculando valores para Frenet
+          let totalValue = 0;
+          let itemsArray: any[] = [];
+          if (items && items.length > 0) {
+            items.forEach((item: any) => {
+              const qty = item.quantity || 1;
+              totalValue += (Number(item.price) || 0) * qty;
+              itemsArray.push({
+                Weight: Number(item.weight) || 0.5,
+                Length: Number(item.length) || 15,
+                Width: Number(item.width) || 15,
+                Height: Number(item.height) || 10,
+                Quantity: qty
+              });
+            });
+          } else {
+            totalValue = 100;
+            itemsArray.push({ Weight: 0.5, Length: 15, Width: 15, Height: 10, Quantity: 1 });
+          }
+
+          const frenetResponse = await fetch("https://api.frenet.com.br/shipping/quote", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Accept": "application/json",
+              "token": FRENET_TOKEN
+            },
+            body: JSON.stringify({
+              SellerCEP: ORIGIN_CEP,
+              RecipientCEP: cep,
+              ShipmentInvoiceValue: totalValue,
+              ShippingItemArray: itemsArray
+            }),
+          });
+
+          const data = await frenetResponse.json();
+          if (data.ShippingSevicesArray && data.ShippingSevicesArray.length > 0) {
+            shippingOptions = data.ShippingSevicesArray
+              .filter((s: any) => !s.Error)
+              .map((s: any) => ({
+                id: `frenet_${s.ServiceCode}`,
+                name: s.ServiceDescription,
+                carrier: s.Carrier,
+                carrier_code: s.CarrierCode,
+                price: parseFloat(s.ShippingPrice),
+                currency: "BRL",
+                estimated_days: parseInt(s.DeliveryTime) + 2,
+                description: `Entrega via ${s.Carrier}`,
+              }));
+          }
+        } catch (e) {
+          console.error("Erro no fallback da Frenet:", e);
+        }
+      }
+    }
+
+    // Fallback final
     if (shippingOptions.length === 0) {
       shippingOptions.push({
         id: "standard_shipping",
@@ -244,7 +296,6 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({
       postal_code: cep,
-      address: addressInfo,
       shipping_options: shippingOptions,
     }), {
       status: 200,
