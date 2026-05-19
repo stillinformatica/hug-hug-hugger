@@ -240,9 +240,9 @@ const Checkout = () => {
 
       if (error) throw error;
 
-      setAddressInfo(data.address);
-      setShippingOptions(data.shipping_options);
-      setSelectedShipping(data.shipping_options[0]?.id || null);
+      setAddressInfo(data.address || { street: "", neighborhood: "", city: "", state: "" });
+      setShippingOptions(data.shipping_options || []);
+      setSelectedShipping(data.shipping_options?.[0]?.id || null);
 
       if (data.shipping_options.length === 1 && data.shipping_options[0].id === "standard_shipping") {
         setShippingError("A Total Express retornou 'Acesso Negado! Seu IP foi arquivado'. O suporte da transportadora precisa liberar o acesso para servidores em nuvem.");
