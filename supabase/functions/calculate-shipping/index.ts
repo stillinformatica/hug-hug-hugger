@@ -71,7 +71,7 @@ serve(async (req) => {
         products: itemsList.map((item: any) => ({
           name: item.name || "Produto",
           quantity: item.quantity || 1,
-          unitary_value: Number(item.price || 0)
+          unitary_value: Number(item.unit_amount || item.price || 1)
         })),
         volumes: [{
           weight: itemsList.reduce((acc: number, item: any) => acc + (Number(item.weight || 0.5) * (item.quantity || 1)), 0),
