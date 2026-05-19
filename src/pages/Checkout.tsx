@@ -704,9 +704,34 @@ const Checkout = () => {
 
                   {addressInfo && (
                     <div className="space-y-4">
-                      <div className="p-3 bg-secondary/50 rounded-xl text-sm">
-                        <p className="font-medium text-foreground">{addressInfo.street}</p>
-                        <p className="text-muted-foreground">{addressInfo.neighborhood} - {addressInfo.city}/{addressInfo.state}</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2 sm:col-span-2">
+                          <Label htmlFor="street">Rua *</Label>
+                          <Input 
+                            id="street" 
+                            value={addressInfo.street} 
+                            onChange={(e) => updateAddressInfo('street', e.target.value)} 
+                            placeholder="Nome da rua" 
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="neighborhood">Bairro *</Label>
+                          <Input 
+                            id="neighborhood" 
+                            value={addressInfo.neighborhood} 
+                            onChange={(e) => updateAddressInfo('neighborhood', e.target.value)} 
+                            placeholder="Seu bairro" 
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="city_state">Cidade / UF *</Label>
+                          <Input 
+                            id="city_state" 
+                            value={`${addressInfo.city}${addressInfo.state ? ` - ${addressInfo.state}` : ''}`} 
+                            readOnly 
+                            className="bg-secondary/50" 
+                          />
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
