@@ -31,15 +31,19 @@ serve(async (req) => {
       throw new Error("RESEND_API_KEY not configured");
     }
 
-    console.log("Sending email via Resend to:", to);
-    const res = await fetch("https://api.resend.com/emails", {
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const GATEWAY_URL = "https://connector-gateway.lovable.dev/resend";
+
+    console.log("Sending email via Resend Gateway to:", to);
+    const res = await fetch(`${GATEWAY_URL}/emails`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${RESEND_API_KEY}`,
+        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "X-Connection-Api-Key": RESEND_API_KEY,
       },
       body: JSON.stringify({
-        from: from || "Still Informatica <onboarding@resend.dev>",
+        from: from || "Still Informatica <contato@stillinformatica.com.br>",
         to: [to],
         subject: subject,
         html: html,
