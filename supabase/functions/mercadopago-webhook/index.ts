@@ -165,7 +165,8 @@ serve(async (req) => {
             console.log("Enviando e-mail de confirmação para:", orderData.customer_email);
 
             
-            await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
+            console.log(`Calling send-email function at: ${SUPABASE_URL}/functions/v1/send-email`);
+            const emailRes = await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
               method: "POST",
               headers: {
                 "Content-Type": "application/json",
@@ -190,6 +191,9 @@ serve(async (req) => {
                 `,
               }),
             });
+            const emailResult = await emailRes.text();
+            console.log("Result from send-email call:", emailRes.status, emailResult);
+
           }
 
           // Registrar coleta na Total Express
