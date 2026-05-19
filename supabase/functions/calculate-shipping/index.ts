@@ -147,6 +147,24 @@ serve(async (req) => {
     const TOTAL_EXPRESS_REID = Deno.env.get("TOTAL_EXPRESS_REID") || "0";
 
     let shippingOptions: any[] = [];
+    let address = null;
+
+    // Busca endereço via ViaCEP
+    try {
+      console.log(`Buscando endereço para CEP ${cep}`);
+      const viaCepResponse = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      const viaCepData = await viaCepResponse.json();
+      if (!viaCepData.erro) {
+        address = {
+          street: viaCepData.logradouro,
+          neighborhood: viaCepData.bairro,
+          city: viaCepData.localidade,
+          state: viaCepData.uf,
+        };
+      }
+    } catch (e) {
+      console.error("Erro ao buscar endereço no ViaCEP:", e);
+    }
 
     if (TOTAL_EXPRESS_USER && TOTAL_EXPRESS_PASSWORD) {
       try {
