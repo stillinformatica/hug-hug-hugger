@@ -315,6 +315,7 @@ serve(async (req) => {
     return new Response(JSON.stringify({
       postal_code: cep,
       shipping_options: shippingOptions,
+      address: address,
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
