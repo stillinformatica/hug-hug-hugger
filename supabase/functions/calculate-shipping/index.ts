@@ -76,17 +76,17 @@ serve(async (req) => {
       };
 
       try {
+        console.log("Chamando Total Express Ticket API com Body:", JSON.stringify(ticketBody));
         const response = await fetch(ticketUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "Authorization": `Basic ${icsAuth}`,
-            "ICS-Authorization": icsAuth,
-            "User-Agent": "Lovable-Integration",
             "Accept": "application/json",
           },
           body: JSON.stringify(ticketBody),
         });
+
 
         const resultText = await response.text();
         console.log("Resposta Total Express REST:", resultText);
@@ -109,6 +109,8 @@ serve(async (req) => {
         return new Response(JSON.stringify({
           success: response.ok,
           data: result,
+          debug_request: ticketBody,
+
           protocol: result.protocolo || result.id || null,
           raw_response: resultText
         }), {
