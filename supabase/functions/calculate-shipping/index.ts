@@ -41,7 +41,7 @@ serve(async (req) => {
       
       // Montar payload para o carrinho do Melhor Envio
       const cartBody = {
-        service: order.shipping_service_id || 1, // Default para algum serviço se não vier no pedido
+        service: order.shipping_address?.shipping_service_id || order.shipping_service_id || 1, // Default para algum serviço se não vier no pedido
         agency: order.shipping_agency_id || null,
         from: {
           name: "Still Informatica",
