@@ -16,17 +16,22 @@ interface EmailPayload {
 }
 
 serve(async (req) => {
+  console.log("=== SEND EMAIL FUNCTION TRIGGERED ===");
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
-    const { to, subject, html, from } = (await req.json()) as EmailPayload;
+    const body = await req.json();
+    console.log("Email Payload:", JSON.stringify({ ...body, html: body.html?.substring(0, 50) + "..." }));
+    const { to, subject, html, from } = body as EmailPayload;
 
     if (!RESEND_API_KEY) {
+      console.error("RESEND_API_KEY is missing");
       throw new Error("RESEND_API_KEY not configured");
     }
 
+    console.log("Sending email via Resend to:", to);
     const res = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -34,7 +39,7 @@ serve(async (req) => {
         Authorization: `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: from || "Still Informatica <onboarding@resend.dev>", // Usar onboarding@resend.dev se o domínio não estiver verificado
+        from: from || "Still Informatica <onboarding@resend.dev>",
         to: [to],
         subject: subject,
         html: html,
@@ -42,6 +47,7 @@ serve(async (req) => {
     });
 
     const data = await res.json();
+    console.log("Resend API Response:", JSON.stringify(data));
 
     if (!res.ok) {
       throw new Error(JSON.stringify(data));
