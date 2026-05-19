@@ -240,9 +240,9 @@ const Checkout = () => {
 
       if (error) throw error;
 
-      setAddressInfo(data.address);
-      setShippingOptions(data.shipping_options);
-      setSelectedShipping(data.shipping_options[0]?.id || null);
+      setAddressInfo(data.address || { street: "", neighborhood: "", city: "", state: "" });
+      setShippingOptions(data.shipping_options || []);
+      setSelectedShipping(data.shipping_options?.[0]?.id || null);
 
       if (data.shipping_options.length === 1 && data.shipping_options[0].id === "standard_shipping") {
         setShippingError("A Total Express retornou 'Acesso Negado! Seu IP foi arquivado'. O suporte da transportadora precisa liberar o acesso para servidores em nuvem.");
@@ -255,6 +255,10 @@ const Checkout = () => {
     } finally {
       setIsLoadingShipping(false);
     }
+  };
+
+  const updateAddressInfo = (field: keyof AddressInfo, value: string) => {
+    setAddressInfo((prev) => prev ? { ...prev, [field]: value } : { street: "", neighborhood: "", city: "", state: "", [field]: value });
   };
 
   useEffect(() => {
@@ -700,9 +704,34 @@ const Checkout = () => {
 
                   {addressInfo && (
                     <div className="space-y-4">
-                      <div className="p-3 bg-secondary/50 rounded-xl text-sm">
-                        <p className="font-medium text-foreground">{addressInfo.street}</p>
-                        <p className="text-muted-foreground">{addressInfo.neighborhood} - {addressInfo.city}/{addressInfo.state}</p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div className="space-y-2 sm:col-span-2">
+                          <Label htmlFor="street">Rua *</Label>
+                          <Input 
+                            id="street" 
+                            value={addressInfo.street} 
+                            onChange={(e) => updateAddressInfo('street', e.target.value)} 
+                            placeholder="Nome da rua" 
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="neighborhood">Bairro *</Label>
+                          <Input 
+                            id="neighborhood" 
+                            value={addressInfo.neighborhood} 
+                            onChange={(e) => updateAddressInfo('neighborhood', e.target.value)} 
+                            placeholder="Seu bairro" 
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="city_state">Cidade / UF *</Label>
+                          <Input 
+                            id="city_state" 
+                            value={`${addressInfo.city}${addressInfo.state ? ` - ${addressInfo.state}` : ''}`} 
+                            readOnly 
+                            className="bg-secondary/50" 
+                          />
+                        </div>
                       </div>
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
