@@ -196,8 +196,8 @@ serve(async (req) => {
 
           }
 
-          // Registrar coleta na Total Express
-          console.log("Registrando coleta na Total Express para o pedido:", referenceId);
+          // Registrar coleta no Melhor Envio
+          console.log("Registrando coleta no Melhor Envio para o pedido:", referenceId);
           await fetch(`${SUPABASE_URL}/functions/v1/calculate-shipping`, {
             method: "POST",
             headers: {

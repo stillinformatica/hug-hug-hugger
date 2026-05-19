@@ -41,7 +41,7 @@ serve(async (req) => {
       
       // Montar payload para o carrinho do Melhor Envio
       const cartBody = {
-        service: order.shipping_service_id || 1, // Default para algum serviço se não vier no pedido
+        service: order.shipping_address?.shipping_service_id || order.shipping_service_id || 1, // Default para algum serviço se não vier no pedido
         agency: order.shipping_agency_id || null,
         from: {
           name: "Still Informatica",
@@ -71,7 +71,7 @@ serve(async (req) => {
         products: itemsList.map((item: any) => ({
           name: item.name || "Produto",
           quantity: item.quantity || 1,
-          unitary_value: Number(item.price || 0)
+          unitary_value: Number(item.unit_amount || item.price || 1)
         })),
         volumes: [{
           weight: itemsList.reduce((acc: number, item: any) => acc + (Number(item.weight || 0.5) * (item.quantity || 1)), 0),
