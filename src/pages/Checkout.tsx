@@ -280,6 +280,7 @@ const Checkout = () => {
             postal_code: cep.replace(/\D/g, ""),
             cpf: customerCpf.replace(/\D/g, ""),
             phone: customerPhone.replace(/\D/g, ""),
+            shipping_service_id: selectedShipping,
           }
         : null,
       items: items.map((item) => ({
