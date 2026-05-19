@@ -257,6 +257,10 @@ const Checkout = () => {
     }
   };
 
+  const updateAddressInfo = (field: keyof AddressInfo, value: string) => {
+    setAddressInfo((prev) => prev ? { ...prev, [field]: value } : { street: "", neighborhood: "", city: "", state: "", [field]: value });
+  };
+
   useEffect(() => {
     checkoutDataRef.current = {
       customer: {
