@@ -111,7 +111,10 @@ serve(async (req) => {
       });
     }
 
-    const { error } = await supabase
+    // Log reference
+    console.log(`Processing order: ${referenceId} with status: ${mappedStatus}`);
+
+    const { error: updateError } = await supabase
       .from("orders")
       .update({
         status: mappedStatus,
@@ -120,22 +123,47 @@ serve(async (req) => {
       })
       .eq("reference_id", referenceId);
 
-    if (error) {
-      console.error("Erro ao atualizar pedido:", error);
+    if (updateError) {
+      console.error("Erro ao atualizar pedido:", updateError);
     } else {
-      console.log("Pedido atualizado:", referenceId, "->", mappedStatus);
+      console.log("Pedido atualizado com sucesso no banco de dados.");
       
       // Enviar e-mail e registrar coleta se o pagamento foi aprovado
       if (mappedStatus === "PAID") {
         try {
-          const { data: orderData } = await supabase
+          let { data: orderData } = await supabase
             .from("orders")
             .select("*")
             .eq("reference_id", referenceId)
             .single();
 
+          // Se o pedido não existir (falhou o insert inicial), criamos um placeholder
+          if (!orderData) {
+            console.warn(`Pedido ${referenceId} não encontrado. Criando placeholder.`);
+            const { data: newOrder, error: insertError } = await supabase
+              .from("orders")
+              .insert({
+                reference_id: referenceId,
+                pagbank_id: String(payment.id),
+                status: "PAID",
+                customer_name: payment.payer?.first_name ? `${payment.payer.first_name} ${payment.payer.last_name || ''}` : (payment.card?.cardholder?.name || 'Cliente'),
+                customer_email: payment.payer?.email || 'contato@stillinformatica.com.br',
+                total_amount: payment.transaction_amount,
+                notification_data: payment,
+              })
+              .select()
+              .single();
+            
+            if (insertError) {
+              console.error("Erro ao criar placeholder de pedido:", insertError);
+            } else {
+              orderData = newOrder;
+            }
+          }
+
           if (orderData?.customer_email) {
             console.log("Enviando e-mail de confirmação para:", orderData.customer_email);
+
             
             await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
               method: "POST",
@@ -146,7 +174,7 @@ serve(async (req) => {
               body: JSON.stringify({
                 to: orderData.customer_email,
                 subject: "Pagamento Confirmado! - Still Informatica",
-                from: "Still Informatica <contato@stillinformatica.com.br>",
+                from: "Still Informatica <onboarding@resend.dev>", // Fallback seguro para Resend
                 html: `
                   <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
                     <h1 style="color: #28a745;">Pagamento Confirmado!</h1>

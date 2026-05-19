@@ -34,7 +34,7 @@ serve(async (req) => {
         Authorization: `Bearer ${RESEND_API_KEY}`,
       },
       body: JSON.stringify({
-        from: from || "Still Informatica <onboarding@resend.dev>",
+        from: from || "Still Informatica <onboarding@resend.dev>", // Usar onboarding@resend.dev se o domínio não estiver verificado
         to: [to],
         subject: subject,
         html: html,

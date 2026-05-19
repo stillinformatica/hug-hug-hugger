@@ -108,10 +108,12 @@ serve(async (req) => {
       });
       if (dbError) {
         console.error("Erro ao salvar pedido:", dbError);
+        console.log("Pedido salvo com sucesso:", referenceId);
       } else {
         // Enviar e-mail de "Pedido Recebido" (Aguardando Pagamento)
         try {
           console.log("Enviando e-mail de pedido recebido para:", customer?.email);
+          const emailFrom = "Still Informatica <onboarding@resend.dev>"; // Fallback seguro para Resend sem domínio verificado
           await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
             method: "POST",
             headers: {
@@ -121,7 +123,8 @@ serve(async (req) => {
             body: JSON.stringify({
               to: customer?.email,
               subject: `Pedido Recebido! #${referenceId} - Still Informatica`,
-              from: "Still Informatica <contato@stillinformatica.com.br>",
+              from: emailFrom,
+
               html: `
                 <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
                   <h1 style="color: #007bff;">Olá, ${customer?.name || 'Cliente'}!</h1>
