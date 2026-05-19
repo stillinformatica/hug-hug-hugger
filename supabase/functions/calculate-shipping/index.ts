@@ -39,7 +39,7 @@ serve(async (req) => {
         ? "https://apis.totalexpress.com.br/ics-ticket-lv/v1/ticket"
         : "https://apis-qa.totalexpress.com.br/ics-ticket-lv/v1/ticket";
 
-      const icsAuth = btoa(`${TOTAL_EXPRESS_USER}:${TOTAL_EXPRESS_PASSWORD}`);
+      const icsAuth = Deno.env.get("TOTAL_EXPRESS_ICS_AUTH") || btoa(`${TOTAL_EXPRESS_USER}:${TOTAL_EXPRESS_PASSWORD}`);
 
       const ticketBody = {
         servicoTipo: 7,
