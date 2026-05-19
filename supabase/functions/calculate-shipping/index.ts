@@ -109,6 +109,8 @@ serve(async (req) => {
         return new Response(JSON.stringify({
           success: response.ok,
           data: result,
+          debug_request: ticketBody,
+
           protocol: result.protocolo || result.id || null,
           raw_response: resultText
         }), {
