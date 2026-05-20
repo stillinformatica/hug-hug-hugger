@@ -474,7 +474,14 @@ const Checkout = () => {
                   } else if (status === "pending" || status === "in_process") {
                     toast.info("Pagamento em processamento");
                   } else {
-                    toast.error("Pagamento não aprovado");
+                    if (data.is_high_risk) {
+                      toast.error("O Mercado Pago recusou o pagamento por segurança.", {
+                        description: "Isso ocorre quando o sistema deles detecta um risco na transação. Recomendamos clicar no botão 'Checkout Externo' abaixo para pagar com mais segurança diretamente no site deles.",
+                        duration: 10000,
+                      });
+                    } else {
+                      toast.error("Pagamento não aprovado");
+                    }
                   }
                 } catch (err) {
                   console.error(err);
