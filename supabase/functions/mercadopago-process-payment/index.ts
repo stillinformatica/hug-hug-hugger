@@ -116,31 +116,31 @@ serve(async (req) => {
         console.error("Erro ao salvar pedido:", dbError);
       } else {
         console.log("Pedido salvo com sucesso:", referenceId);
-      }
-      
-      // Enviar e-mail de "Pedido Recebido" (Aguardando Pagamento)
-      try {
+
+        // Enviar e-mail de "Pedido Recebido" (Aguardando Pagamento)
+        try {
           console.log("Enviando e-mail de pedido recebido para:", customer?.email);
-          const emailFrom = "Still Informatica <onboarding@resend.dev>"; // Fallback seguro para Resend sem domínio verificado
+          const emailFrom = "Still Informatica <onboarding@resend.dev>";
           await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+              Authorization: `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
             },
             body: JSON.stringify({
               to: customer?.email,
               subject: `Pedido Recebido! #${referenceId} - Still Informatica`,
               from: emailFrom,
-
               html: `
                 <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-                  <h1 style="color: #007bff;">Olá, ${customer?.name || 'Cliente'}!</h1>
+                  <h1 style="color: #007bff;">Olá, ${customer?.name || "Cliente"}!</h1>
                   <p>Recebemos o seu pedido <strong>${referenceId}</strong>.</p>
                   <p>Status atual: <strong>Aguardando Pagamento</strong>.</p>
                   <p>Assim que o pagamento for confirmado, iniciaremos o processo de separação e envio.</p>
                   <div style="background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                    <p style="margin: 0;"><strong>Valor Total:</strong> R$ ${totalAmount.toFixed(2).replace(".", ",")}</p>
+                    <p style="margin: 0;"><strong>Valor Total:</strong> R$ ${totalAmount
+                      .toFixed(2)
+                      .replace(".", ",")}</p>
                   </div>
                   <p>Atenciosamente,<br>Equipe Still Informatica</p>
                 </div>
