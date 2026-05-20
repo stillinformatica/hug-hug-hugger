@@ -98,7 +98,8 @@ serve(async (req) => {
           country_name: "Brasil"
         }
       } : undefined,
-      auto_return: "approved",
+      auto_return: "all",
+      binary_mode: true,
       external_reference: referenceId,
       notification_url: webhookUrl,
       statement_descriptor: "STILL INFO",
