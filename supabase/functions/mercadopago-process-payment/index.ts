@@ -54,6 +54,12 @@ serve(async (req) => {
     // formData vem do Payment Brick e já contém token, payment_method_id, etc.
     const paymentPayload: Record<string, unknown> = {
       ...formData,
+      payer: {
+        ...((formData as any).payer || {}),
+        email: customer?.email,
+        first_name: customer?.name?.split(" ")[0],
+        last_name: customer?.name?.split(" ").slice(1).join(" "),
+      },
       transaction_amount: Number(totalAmount.toFixed(2)),
       description: `Pedido ${referenceId}`,
       external_reference: referenceId,
@@ -110,9 +116,10 @@ serve(async (req) => {
         console.error("Erro ao salvar pedido:", dbError);
       } else {
         console.log("Pedido salvo com sucesso:", referenceId);
-      } else {
-        // Enviar e-mail de "Pedido Recebido" (Aguardando Pagamento)
-        try {
+      }
+      
+      // Enviar e-mail de "Pedido Recebido" (Aguardando Pagamento)
+      try {
           console.log("Enviando e-mail de pedido recebido para:", customer?.email);
           const emailFrom = "Still Informatica <onboarding@resend.dev>"; // Fallback seguro para Resend sem domínio verificado
           await fetch(`${SUPABASE_URL}/functions/v1/send-email`, {

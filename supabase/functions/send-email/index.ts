@@ -43,7 +43,7 @@ serve(async (req) => {
         "X-Connection-Api-Key": RESEND_API_KEY,
       },
       body: JSON.stringify({
-        from: from || "Still Informatica <contato@stillinformatica.com.br>",
+        from: from || "Still Informatica <onboarding@resend.dev>",
         to: [to],
         subject: subject,
         html: html,
