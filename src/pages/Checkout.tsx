@@ -195,6 +195,7 @@ const Checkout = () => {
   const [brickLoading, setBrickLoading] = useState(false);
   const [brickError, setBrickError] = useState<string | null>(null);
   const [redirectCheckoutLoading, setRedirectCheckoutLoading] = useState(false);
+  const [pagBankLoading, setPagBankLoading] = useState(false);
   const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null);
 
   const brickControllerRef = useRef<any>(null);
