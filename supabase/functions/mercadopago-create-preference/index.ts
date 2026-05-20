@@ -86,6 +86,18 @@ serve(async (req) => {
         pending: `${origin}/checkout?payment=pending&ref=${referenceId}`,
         failure: `${origin}/checkout?payment=failure&ref=${referenceId}`,
       },
+      shipments: shipping ? {
+        receiver_address: {
+          zip_code: (shipping as any).postal_code,
+          street_name: (shipping as any).street,
+          street_number: Number((shipping as any).number),
+          floor: (shipping as any).complement || undefined,
+          apartment: undefined,
+          city_name: (shipping as any).city,
+          state_name: (shipping as any).region_code,
+          country_name: "Brasil"
+        }
+      } : undefined,
       auto_return: "approved",
       external_reference: referenceId,
       notification_url: webhookUrl,
