@@ -98,7 +98,7 @@ serve(async (req) => {
       const { error: dbError } = await supabase.from("orders").insert({
         reference_id: referenceId,
         pagbank_id: String(data.id),
-        status: data.status?.toUpperCase() || "CREATED",
+        status: data.status === "rejected" ? "CANCELLED" : (data.status?.toUpperCase() || "CREATED"),
         customer_name: customer?.name || null,
         customer_email: customer?.email || null,
         total_amount: totalAmount,
@@ -108,6 +108,7 @@ serve(async (req) => {
       });
       if (dbError) {
         console.error("Erro ao salvar pedido:", dbError);
+      } else {
         console.log("Pedido salvo com sucesso:", referenceId);
       } else {
         // Enviar e-mail de "Pedido Recebido" (Aguardando Pagamento)
