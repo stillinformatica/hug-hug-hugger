@@ -209,6 +209,7 @@ serve(async (req) => {
         ticket_url: data.point_of_interaction?.transaction_data?.ticket_url,
         // Dados para Boleto
         boleto_url: data.transaction_details?.external_resource_url,
+        is_high_risk: isHighRisk,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
