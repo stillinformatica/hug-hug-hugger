@@ -28,7 +28,7 @@ serve(async (req) => {
 
     const body = await req.json();
     const { items, customer, shipping, shippingCost } = body as {
-      items: Array<{ name: string; quantity: number; unit_amount: number; reference_id?: string; image?: string }>;
+      items: Array<{ name: string; description?: string; quantity: number; unit_amount: number; reference_id?: string; image?: string }>;
       customer?: { name?: string; email?: string; phone?: string };
       shipping?: Record<string, unknown>;
       shippingCost?: number;
