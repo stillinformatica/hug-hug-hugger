@@ -5,6 +5,7 @@ import type { Product } from '@/hooks/useProducts';
 export interface CartItem {
   productId: string;
   name: string;
+  description: string | null;
   image: string | null;
   price: number;
   quantity: number;
