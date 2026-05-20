@@ -957,17 +957,45 @@ const Checkout = () => {
                 </div>
 
                 {!showBrick && (
-                  <div className="space-y-2">
+                  <div className="space-y-3">
+                    <Button
+                      onClick={handlePagBankCheckout}
+                      size="lg"
+                      className="w-full rounded-xl bg-[#009EE3] hover:bg-[#008AC0] text-white font-bold h-14"
+                      disabled={!!paymentRequirementsMessage || pagBankLoading}
+                    >
+                      {pagBankLoading ? (
+                        <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                      ) : (
+                        <img 
+                          src="https://assets.pagseguro.com.br/ps-bootstrap/v6.63.1/img/pagseguro/logo-pagseguro.png" 
+                          alt="PagSeguro" 
+                          className="h-6 mr-2 invert brightness-0"
+                        />
+                      )}
+                      Pagar com PagSeguro
+                    </Button>
+
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center">
+                        <span className="w-full border-t" />
+                      </div>
+                      <div className="relative flex justify-center text-xs uppercase">
+                        <span className="bg-background px-2 text-muted-foreground">Ou use</span>
+                      </div>
+                    </div>
+
                     <Button
                       onClick={startPayment}
-                      size="lg"
+                      variant="outline"
                       className="w-full rounded-xl"
                       disabled={!!paymentRequirementsMessage}
                     >
-                      <CreditCard className="h-5 w-5 mr-2" /> Ir para Pagamento
+                      <CreditCard className="h-4 w-4 mr-2" /> Mercado Pago (Checkout no site)
                     </Button>
+                    
                     <p className="text-xs text-center min-h-4 text-muted-foreground">
-                      {paymentRequirementsMessage ?? "Pagamento direto no site. Aceita Pix, cartão de crédito, débito e boleto."}
+                      {paymentRequirementsMessage ?? "Pagamento seguro e garantido."}
                     </p>
                   </div>
                 )}
