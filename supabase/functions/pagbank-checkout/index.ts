@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const PAGBANK_BASE_URL = "https://sandbox.api.pagseguro.com";
+const PAGBANK_BASE_URL = "https://api.pagseguro.com";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -52,7 +52,7 @@ serve(async (req) => {
     // Webhook URL via edge function
     const webhookUrl = `${SUPABASE_URL}/functions/v1/pagbank-webhook`;
 
-    const checkoutPayload = {
+    const checkoutPayload: any = {
       reference_id: referenceId,
       expiration_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, '-03:00'),
       customer_modifiable: true,
@@ -79,6 +79,35 @@ serve(async (req) => {
       notification_urls: [webhookUrl],
       payment_notification_urls: [webhookUrl],
     };
+
+    if (customer) {
+      checkoutPayload.customer = {
+        name: customer.name,
+        email: customer.email,
+        tax_id: customer.cpf?.replace(/\D/g, ""),
+        phones: customer.phone ? [{
+          country: "55",
+          area: customer.phone.substring(0, 2),
+          number: customer.phone.substring(2),
+          type: "MOBILE"
+        }] : []
+      };
+    }
+
+    if (shipping) {
+      checkoutPayload.shipping = {
+        address: {
+          street: shipping.street,
+          number: shipping.number || "S/N",
+          complement: shipping.complement || "",
+          locality: shipping.locality,
+          city: shipping.city,
+          region_code: shipping.region_code,
+          country: "BRA",
+          postal_code: shipping.postal_code?.replace(/\D/g, ""),
+        }
+      };
+    }
 
     const payloadJson = JSON.stringify(checkoutPayload);
     console.log("=== PAGBANK CHECKOUT REQUEST ===");

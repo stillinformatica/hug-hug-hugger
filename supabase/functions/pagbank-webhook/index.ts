@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const PAGBANK_SANDBOX_WS = "https://ws.sandbox.pagbank.com.br";
+const PAGBANK_PROD_WS = "https://ws.pagseguro.uol.com.br";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -87,7 +87,7 @@ serve(async (req) => {
     // Query PagBank sandbox for transaction details
     if (notificationType === "transaction") {
       const response = await fetch(
-        `${PAGBANK_SANDBOX_WS}/v3/transactions/notifications/${notificationCode}`,
+        `${PAGBANK_PROD_WS}/v3/transactions/notifications/${notificationCode}`,
         {
           headers: {
             "Content-Type": "application/json",
