@@ -1,6 +1,7 @@
-const TOTAL_EXPRESS_USER = "84216stillin-prod";
-const TOTAL_EXPRESS_PASSWORD = "5aOWzm3V1v";
-const TOTAL_EXPRESS_REID = "1"; 
+
+const TOTAL_EXPRESS_USER = Deno.env.get("TOTAL_EXPRESS_USER") || "STILLINFO";
+const TOTAL_EXPRESS_PASSWORD = Deno.env.get("TOTAL_EXPRESS_PASSWORD") || "5aOWzm3V1v";
+const TOTAL_EXPRESS_REID = Deno.env.get("TOTAL_EXPRESS_REID") || "35492"; 
 const ORIGIN_CEP = "07063000";
 const cep = "01310100";
 const finalWeight = 1.0;
@@ -23,6 +24,8 @@ const soapRequest = '<?xml version="1.0" encoding="utf-8"?>' +
 '   </soapenv:Body>' +
 '</soapenv:Envelope>';
 
+console.log(`Testando com Usuário: ${TOTAL_EXPRESS_USER}, REID: ${TOTAL_EXPRESS_REID}`);
+
 const response = await fetch("https://edi.totalexpress.com.br/webservice24.php", {
   method: "POST",
   headers: {
@@ -34,4 +37,10 @@ const response = await fetch("https://edi.totalexpress.com.br/webservice24.php",
 });
 
 console.log("Status:", response.status);
-console.log("Body:", await response.text());
+const text = await response.text();
+console.log("Body:", text);
+
+if (text.includes("Acesso Negado") && text.includes("IP foi arquivado")) {
+    const ip = text.match(/IP foi arquivado para controle: ([\d\.]+)/)?.[1];
+    console.log(`\nATENÇÃO: Bloqueio de IP detectado. IP atual do servidor: ${ip}`);
+}
