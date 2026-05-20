@@ -35,8 +35,8 @@ serve(async (req) => {
       totalAmount,
     } = body as {
       formData: Record<string, unknown>;
-      items: Array<{ name: string; quantity: number; unit_amount: number; reference_id?: string }>;
-      customer?: { name?: string; email?: string; phone?: string };
+      items: Array<{ name: string; description?: string; quantity: number; unit_amount: number; reference_id?: string; image?: string }>;
+      customer?: { name?: string; email?: string; phone?: string; cpf?: string };
       shipping?: Record<string, unknown>;
       totalAmount: number;
     };
