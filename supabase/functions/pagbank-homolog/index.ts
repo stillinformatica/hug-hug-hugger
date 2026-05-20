@@ -16,7 +16,7 @@ serve(async (req) => {
     
     const checkoutPayload = {
       reference_id: referenceId,
-      expiration_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().replace(/\\.\\d{3}Z$/, "-03:00"),
+      expiration_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, "-03:00"),
       customer_modifiable: true,
       items: [{
         reference_id: "homolog_item_1",
@@ -47,23 +47,41 @@ serve(async (req) => {
       }
     };
 
+    console.log("=== SANDBOX PAGBANK REQUEST ===");
+    console.log("Payload:", JSON.stringify(checkoutPayload, null, 2));
+
     const response = await fetch("https://sandbox.api.pagseguro.com/checkouts", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": "Bearer " + PAGBANK_TOKEN,
+        "Authorization": `Bearer ${PAGBANK_TOKEN}`,
         "x-api-version": "4.0",
       },
       body: JSON.stringify(checkoutPayload),
     });
 
-    const data = await response.json();
+    const responseText = await response.text();
+    console.log("=== SANDBOX PAGBANK RESPONSE ===");
+    console.log("Status:", response.status);
+    console.log("Body:", responseText);
+
+    let responseData;
+    try {
+      responseData = JSON.parse(responseText);
+    } catch (e) {
+      responseData = { raw: responseText };
+    }
 
     return new Response(
-      JSON.stringify({ request: checkoutPayload, response: data }),
+      JSON.stringify({ 
+        request: checkoutPayload, 
+        response: responseData,
+        status: response.status
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    console.error("Homolog error:", error);
     return new Response(
       JSON.stringify({ error: String(error) }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
