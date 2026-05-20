@@ -370,6 +370,48 @@ const Checkout = () => {
       setRedirectCheckoutLoading(false);
     }
   };
+  
+  const handlePagBankCheckout = async () => {
+    if (paymentRequirementsMessage) {
+      toast.error("Dados incompletos", { description: paymentRequirementsMessage });
+      return;
+    }
+
+    const ctx = checkoutDataRef.current;
+    setPagBankLoading(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("pagbank-checkout", {
+        body: {
+          items: items.map((item) => ({
+            name: item.name,
+            description: item.description || item.name,
+            quantity: item.quantity,
+            unit_amount: item.price,
+            productId: item.productId,
+          })),
+          customer: ctx.customer,
+          shipping: ctx.shipping,
+        },
+      });
+
+      if (error) throw error;
+
+      const paymentUrl = data?.payment_url;
+      if (!paymentUrl) {
+        throw new Error("Não foi possível gerar o checkout do PagBank.");
+      }
+
+      window.location.href = paymentUrl;
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao abrir checkout do PagBank", {
+        description: err instanceof Error ? err.message : "Tente novamente em instantes",
+      });
+    } finally {
+      setPagBankLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!showBrick) return;
