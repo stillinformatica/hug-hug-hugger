@@ -135,6 +135,9 @@ serve(async (req) => {
 
     const data = JSON.parse(responseText);
 
+    // Se o status for rejected_high_risk, tentamos sugerir o checkout por redirecionamento
+    const isHighRisk = data.status === "rejected" && data.status_detail === "rejected_high_risk";
+
     if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
       const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
       const { error: dbError } = await supabase.from("orders").insert({
@@ -146,7 +149,12 @@ serve(async (req) => {
         total_amount: totalAmount,
         items: items,
         shipping_address: shipping || null,
-        notification_data: data,
+        notification_data: {
+          ...data,
+          _mp_id: data.id,
+          _mp_status: data.status,
+          _mp_detail: data.status_detail
+        },
       });
       if (dbError) {
         console.error("Erro ao salvar pedido:", dbError);
@@ -201,6 +209,7 @@ serve(async (req) => {
         ticket_url: data.point_of_interaction?.transaction_data?.ticket_url,
         // Dados para Boleto
         boleto_url: data.transaction_details?.external_resource_url,
+        is_high_risk: isHighRisk,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
