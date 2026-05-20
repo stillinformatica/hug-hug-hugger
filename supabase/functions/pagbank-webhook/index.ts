@@ -87,7 +87,7 @@ serve(async (req) => {
     // Query PagBank sandbox for transaction details
     if (notificationType === "transaction") {
       const response = await fetch(
-        `${PAGBANK_SANDBOX_WS}/v3/transactions/notifications/${notificationCode}`,
+        `${PAGBANK_PROD_WS}/v3/transactions/notifications/${notificationCode}`,
         {
           headers: {
             "Content-Type": "application/json",
