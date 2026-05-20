@@ -285,6 +285,7 @@ const Checkout = () => {
         : null,
       items: items.map((item) => ({
         name: item.name,
+        description: item.description || item.name,
         quantity: item.quantity,
         unit_amount: item.price,
         reference_id: item.productId,
@@ -339,6 +340,7 @@ const Checkout = () => {
         body: {
           items: items.map((item) => ({
             name: item.name,
+            description: item.description || item.name,
             quantity: item.quantity,
             unit_amount: item.price,
             reference_id: item.productId,

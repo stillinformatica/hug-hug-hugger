@@ -35,8 +35,8 @@ serve(async (req) => {
       totalAmount,
     } = body as {
       formData: Record<string, unknown>;
-      items: Array<{ name: string; quantity: number; unit_amount: number; reference_id?: string }>;
-      customer?: { name?: string; email?: string; phone?: string };
+      items: Array<{ name: string; description?: string; quantity: number; unit_amount: number; reference_id?: string; image?: string }>;
+      customer?: { name?: string; email?: string; phone?: string; cpf?: string };
       shipping?: Record<string, unknown>;
       totalAmount: number;
     };
@@ -51,17 +51,53 @@ serve(async (req) => {
     const referenceId = `ORDER_${Date.now()}`;
     const webhookUrl = `${SUPABASE_URL}/functions/v1/mercadopago-webhook`;
 
+    // Payer info for identification
+    const payerIdentification = customer?.cpf ? {
+      type: "CPF",
+      number: customer.cpf.replace(/\D/g, "")
+    } : undefined;
+
     // formData vem do Payment Brick e já contém token, payment_method_id, etc.
     const paymentPayload: Record<string, unknown> = {
       ...formData,
       payer: {
         ...((formData as any).payer || {}),
         email: customer?.email,
-        first_name: customer?.name?.split(" ")[0],
-        last_name: customer?.name?.split(" ").slice(1).join(" "),
+        first_name: customer?.name?.split(" ")[0] || "Cliente",
+        last_name: customer?.name?.split(" ").slice(1).join(" ") || "Still",
+        identification: payerIdentification,
+      },
+      additional_info: {
+        items: items.map(item => ({
+          id: item.reference_id,
+          title: item.name,
+          description: item.description || item.name,
+          picture_url: item.image,
+          category_id: "electronics", // Ajustado para melhorar score
+          quantity: item.quantity,
+          unit_price: Number(item.unit_amount.toFixed(2)),
+        })),
+        payer: {
+          first_name: customer?.name?.split(" ")[0] || "Cliente",
+          last_name: customer?.name?.split(" ").slice(1).join(" ") || "Still",
+          phone: customer?.phone ? {
+            area_code: customer.phone.substring(0, 2),
+            number: customer.phone.substring(2)
+          } : undefined,
+          registration_date: new Date().toISOString(),
+        },
+        shipments: shipping ? {
+          receiver_address: {
+            street_name: (shipping as any).street,
+            street_number: Number((shipping as any).number),
+            zip_code: (shipping as any).postal_code,
+            city_name: (shipping as any).city,
+            state_name: (shipping as any).region_code,
+          }
+        } : undefined
       },
       transaction_amount: Number(totalAmount.toFixed(2)),
-      description: `Pedido ${referenceId}`,
+      description: `Pedido na Still Informatica - ${referenceId}`,
       external_reference: referenceId,
       notification_url: webhookUrl,
       statement_descriptor: "STILL INFO",

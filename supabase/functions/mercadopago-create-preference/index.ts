@@ -28,8 +28,8 @@ serve(async (req) => {
 
     const body = await req.json();
     const { items, customer, shipping, shippingCost } = body as {
-      items: Array<{ name: string; quantity: number; unit_amount: number; reference_id?: string; image?: string }>;
-      customer?: { name?: string; email?: string; phone?: string };
+      items: Array<{ name: string; description?: string; quantity: number; unit_amount: number; reference_id?: string; image?: string }>;
+      customer?: { name?: string; email?: string; phone?: string; cpf?: string };
       shipping?: Record<string, unknown>;
       shippingCost?: number;
     };
@@ -49,6 +49,7 @@ serve(async (req) => {
     const mpItems = items.map((item, idx) => ({
       id: item.reference_id || `item_${idx + 1}`,
       title: item.name.substring(0, 256),
+      description: (item.description || item.name).substring(0, 256),
       quantity: item.quantity,
       unit_price: Number(item.unit_amount.toFixed(2)),
       currency_id: "BRL",
@@ -73,7 +74,11 @@ serve(async (req) => {
           name: firstName || undefined,
           surname: rest.join(" ") || undefined,
           email: customer.email,
-          phone: customer?.phone ? { number: customer.phone } : undefined,
+          phone: customer?.phone ? { number: customer.phone.replace(/\D/g, "") } : undefined,
+          identification: customer?.cpf ? {
+            type: "CPF",
+            number: customer.cpf.replace(/\D/g, "")
+          } : undefined,
         }
         : undefined,
       back_urls: {
@@ -81,6 +86,18 @@ serve(async (req) => {
         pending: `${origin}/checkout?payment=pending&ref=${referenceId}`,
         failure: `${origin}/checkout?payment=failure&ref=${referenceId}`,
       },
+      shipments: shipping ? {
+        receiver_address: {
+          zip_code: (shipping as any).postal_code,
+          street_name: (shipping as any).street,
+          street_number: Number((shipping as any).number),
+          floor: (shipping as any).complement || undefined,
+          apartment: undefined,
+          city_name: (shipping as any).city,
+          state_name: (shipping as any).region_code,
+          country_name: "Brasil"
+        }
+      } : undefined,
       auto_return: "approved",
       external_reference: referenceId,
       notification_url: webhookUrl,
