@@ -52,7 +52,7 @@ serve(async (req) => {
     // Webhook URL via edge function
     const webhookUrl = `${SUPABASE_URL}/functions/v1/pagbank-webhook`;
 
-    const checkoutPayload = {
+    const checkoutPayload: any = {
       reference_id: referenceId,
       expiration_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, '-03:00'),
       customer_modifiable: true,
@@ -79,6 +79,35 @@ serve(async (req) => {
       notification_urls: [webhookUrl],
       payment_notification_urls: [webhookUrl],
     };
+
+    if (customer) {
+      checkoutPayload.customer = {
+        name: customer.name,
+        email: customer.email,
+        tax_id: customer.cpf?.replace(/\D/g, ""),
+        phones: customer.phone ? [{
+          country: "55",
+          area: customer.phone.substring(0, 2),
+          number: customer.phone.substring(2),
+          type: "MOBILE"
+        }] : []
+      };
+    }
+
+    if (shipping) {
+      checkoutPayload.shipping = {
+        address: {
+          street: shipping.street,
+          number: shipping.number || "S/N",
+          complement: shipping.complement || "",
+          locality: shipping.locality,
+          city: shipping.city,
+          region_code: shipping.region_code,
+          country: "BRA",
+          postal_code: shipping.postal_code?.replace(/\D/g, ""),
+        }
+      };
+    }
 
     const payloadJson = JSON.stringify(checkoutPayload);
     console.log("=== PAGBANK CHECKOUT REQUEST ===");
