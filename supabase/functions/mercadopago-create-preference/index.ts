@@ -49,6 +49,7 @@ serve(async (req) => {
     const mpItems = items.map((item, idx) => ({
       id: item.reference_id || `item_${idx + 1}`,
       title: item.name.substring(0, 256),
+      description: (item.description || item.name).substring(0, 256),
       quantity: item.quantity,
       unit_price: Number(item.unit_amount.toFixed(2)),
       currency_id: "BRL",
