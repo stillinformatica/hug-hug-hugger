@@ -74,7 +74,11 @@ serve(async (req) => {
           name: firstName || undefined,
           surname: rest.join(" ") || undefined,
           email: customer.email,
-          phone: customer?.phone ? { number: customer.phone } : undefined,
+          phone: customer?.phone ? { number: customer.phone.replace(/\D/g, "") } : undefined,
+          identification: customer?.cpf ? {
+            type: "CPF",
+            number: customer.cpf.replace(/\D/g, "")
+          } : undefined,
         }
         : undefined,
       back_urls: {
