@@ -48,6 +48,7 @@ export const useCartStore = create<CartStore>()(
               {
                 productId: product.id,
                 name: product.name,
+                description: product.description || product.name,
                 image: product.images?.[0] || null,
                 price: product.price,
                 quantity,
