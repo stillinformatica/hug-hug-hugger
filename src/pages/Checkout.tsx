@@ -205,36 +205,71 @@ const Checkout = () => {
       return;
     }
 
-    const ctx = checkoutDataRef.current;
+    if (!cardNumber || !cardName || !cardExpiry || !cardCvv) {
+      toast.error("Dados do cartão incompletos", { description: "Preencha todos os campos do cartão de crédito" });
+      return;
+    }
+
     setPagBankLoading(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke("pagbank-checkout", {
+      // 1. Encrypt card data using PagBank SDK
+      if (!window.PagSeguro) {
+        throw new Error("O sistema de pagamento não carregou corretamente. Recarregue a página.");
+      }
+
+      const expiryParts = cardExpiry.split("/");
+      const expMonth = expiryParts[0]?.trim();
+      const expYear = expiryParts[1]?.trim() ? `20${expiryParts[1].trim()}` : "";
+
+      const card = window.PagSeguro.encryptCard({
+        publicKey: "YOUR_PAGBANK_PUBLIC_KEY", // This should be a client-side public key
+        holder: cardName,
+        number: cardNumber.replace(/\s/g, ""),
+        expMonth: expMonth,
+        expYear: expYear,
+        securityCode: cardCvv,
+      });
+
+      if (card.errors) {
+        console.error("Card encryption errors:", card.errors);
+        throw new Error("Dados do cartão inválidos. Verifique as informações digitadas.");
+      }
+
+      const encryptedCard = card.encryptedCard;
+      const ctx = checkoutDataRef.current;
+
+      // 2. Send encrypted data to our backend edge function
+      const { data, error } = await supabase.functions.invoke("pagbank-checkout-transparent", {
         body: {
           items: items.map((item) => ({
             name: item.name,
-            description: item.description || item.name,
             quantity: item.quantity,
             unit_amount: item.price,
             productId: item.productId,
           })),
           customer: ctx.customer,
           shipping: ctx.shipping,
+          card_token: encryptedCard,
+          installments: parseInt(installments),
         },
       });
 
       if (error) throw error;
 
-      const paymentUrl = data?.payment_url || data?.links?.find((l: any) => l.rel === "PAY")?.href;
-      if (!paymentUrl) {
-        throw new Error("Não foi possível gerar o link de pagamento do PagBank.");
+      if (data.status === "PAID" || data.status === "AUTHORIZED") {
+        setPaymentResult({ status: "approved", reference_id: data.reference_id });
+        clearCart();
+      } else if (data.status === "WAITING_PAYMENT" || data.status === "IN_ANALYSIS") {
+        setPaymentResult({ status: "pending", reference_id: data.reference_id });
+      } else {
+        throw new Error(`O pagamento foi ${data.status || 'recusado'}.`);
       }
 
-      window.location.href = paymentUrl;
     } catch (err) {
       console.error(err);
-      toast.error("Erro ao abrir checkout do PagBank", {
-        description: err instanceof Error ? err.message : "Tente novamente em instantes",
+      toast.error("Erro no processamento do pagamento", {
+        description: err instanceof Error ? err.message : "Verifique os dados do cartão e tente novamente",
       });
     } finally {
       setPagBankLoading(false);
