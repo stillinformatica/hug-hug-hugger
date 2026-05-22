@@ -26,7 +26,7 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { items, customer, shipping, card_token, installments } = body;
+    const { items, customer, shipping, card_token, installments, payment_method = "CREDIT_CARD" } = body;
 
     const referenceId = `ORDER_${Date.now()}`;
 
@@ -50,8 +50,8 @@ serve(async (req) => {
         tax_id: customer.cpf.replace(/\D/g, ""),
         phones: [{
           country: "55",
-          area: customer.phone.substring(0, 2),
-          number: customer.phone.substring(2),
+          area: customer.phone.replace(/\D/g, "").substring(0, 2),
+          number: customer.phone.replace(/\D/g, "").substring(2),
           type: "MOBILE"
         }]
       },
@@ -59,7 +59,7 @@ serve(async (req) => {
       shipping: {
         address: {
           street: shipping.street,
-          number: shipping.number,
+          number: shipping.number || "1",
           complement: shipping.complement || "N/A",
           locality: shipping.locality,
           city: shipping.city,
@@ -68,22 +68,32 @@ serve(async (req) => {
           postal_code: shipping.postal_code.replace(/\D/g, ""),
         }
       },
-      payment_method: {
+      notification_urls: [`${SUPABASE_URL}/functions/v1/pagbank-webhook`]
+    };
+
+    if (payment_method === "PIX") {
+      payload.qr_codes = [{
+        amount: {
+          value: totalAmount
+        },
+        expiration_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24h
+      }];
+    } else {
+      payload.payment_method = {
         type: "CREDIT_CARD",
         installments: installments || 1,
         capture: true,
         card: {
           encrypted: card_token,
-          security_code: "000", // Will use the one in the encrypted token but field is often required
+          security_code: "000",
           store: false
         },
         holder: {
           name: customer.name,
           tax_id: customer.cpf.replace(/\D/g, "")
         }
-      },
-      notification_urls: [`${SUPABASE_URL}/functions/v1/pagbank-webhook`]
-    };
+      };
+    }
 
     const response = await fetch(`${PAGBANK_BASE_URL}/orders`, {
       method: "POST",
@@ -112,11 +122,17 @@ serve(async (req) => {
         });
       }
 
+      const qrCode = data.qr_codes?.[0];
+      
       return new Response(
         JSON.stringify({ 
-          status: data.charges?.[0]?.status || "PENDING", 
+          status: data.charges?.[0]?.status || (qrCode ? "PENDING" : "UNKNOWN"), 
           reference_id: referenceId,
-          id: data.id 
+          id: data.id,
+          qr_code: qrCode ? {
+            text: qrCode.text,
+            links: qrCode.links
+          } : null
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
