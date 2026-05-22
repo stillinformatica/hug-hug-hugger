@@ -729,6 +729,8 @@ const Checkout = () => {
                   >
                     {pagBankLoading ? (
                       <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                    ) : paymentMethod === "PIX" ? (
+                      <QrCode className="h-6 mr-2" />
                     ) : (
                       <img 
                         src="https://assets.pagseguro.com.br/ps-bootstrap/v6.63.1/img/pagseguro/logo-pagseguro.png" 
@@ -736,7 +738,7 @@ const Checkout = () => {
                         className="h-6 mr-2 invert brightness-0"
                       />
                     )}
-                    Finalizar com PagSeguro
+                    {paymentMethod === "PIX" ? "Gerar QR Code PIX" : "Finalizar com PagSeguro"}
                   </Button>
                   
                   <p className="text-xs text-center min-h-4 text-muted-foreground">
