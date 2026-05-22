@@ -381,6 +381,88 @@ const Checkout = () => {
               </Card>
             </motion.div>
 
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <CreditCard className="h-5 w-5 text-primary" />
+                    Dados de Pagamento (Cartão de Crédito)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="cardNumber">Número do Cartão</Label>
+                    <div className="relative">
+                      <Input 
+                        id="cardNumber" 
+                        value={cardNumber} 
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "").replace(/(.{4})/g, "$1 ").trim();
+                          setCardNumber(val.substring(0, 19));
+                        }} 
+                        placeholder="0000 0000 0000 0000" 
+                      />
+                      <CreditCard className="absolute right-3 top-2.5 h-5 w-5 text-muted-foreground opacity-50" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cardName">Nome no Cartão</Label>
+                    <Input 
+                      id="cardName" 
+                      value={cardName} 
+                      onChange={(e) => setCardName(e.target.value.toUpperCase())} 
+                      placeholder="COMO ESTÁ NO CARTÃO" 
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="cardExpiry">Validade</Label>
+                      <div className="relative">
+                        <Input 
+                          id="cardExpiry" 
+                          value={cardExpiry} 
+                          onChange={(e) => {
+                            let val = e.target.value.replace(/\D/g, "");
+                            if (val.length > 2) val = val.substring(0, 2) + "/" + val.substring(2, 4);
+                            setCardExpiry(val);
+                          }} 
+                          placeholder="MM/AA" 
+                          maxLength={5}
+                        />
+                        <Calendar className="absolute right-3 top-2.5 h-5 w-5 text-muted-foreground opacity-50" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="cardCvv">CVV</Label>
+                      <div className="relative">
+                        <Input 
+                          id="cardCvv" 
+                          type="password"
+                          value={cardCvv} 
+                          onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, "").substring(0, 4))} 
+                          placeholder="123" 
+                        />
+                        <Lock className="absolute right-3 top-2.5 h-5 w-5 text-muted-foreground opacity-50" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="installments">Parcelamento</Label>
+                    <select 
+                      id="installments"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={installments}
+                      onChange={(e) => setInstallments(e.target.value)}
+                    >
+                      <option value="1">1x de R$ {totalPrice.toFixed(2).replace(".", ",")} sem juros</option>
+                      {totalPrice > 100 && <option value="2">2x de R$ {(totalPrice / 2).toFixed(2).replace(".", ",")} sem juros</option>}
+                      {totalPrice > 150 && <option value="3">3x de R$ {(totalPrice / 3).toFixed(2).replace(".", ",")} sem juros</option>}
+                    </select>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
               <Card>
                 <CardHeader>
