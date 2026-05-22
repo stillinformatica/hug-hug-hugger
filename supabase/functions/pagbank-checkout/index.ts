@@ -6,7 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-const PAGBANK_BASE_URL = "https://api.pagseguro.com";
+const PAGBANK_BASE_URL = "https://api.pagseguro.com"; // Keep production URL unless debugging specifically with sandbox
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -41,7 +41,7 @@ serve(async (req) => {
       reference_id: `item_${index + 1}`,
       name: item.name.substring(0, 64),
       quantity: item.quantity,
-      unit_amount: Math.round(item.unit_amount * 100),
+      unit_amount: Math.max(1, Math.round(item.unit_amount * 100)), // Ensure at least 0.01
     }));
 
     const totalAmount = orderItems.reduce(
@@ -99,7 +99,7 @@ serve(async (req) => {
         type: "FREE", // PagBank requires a type. Using FREE as it's the most common for simple checkouts, or you can pass it from frontend
         address: {
           street: shipping.street,
-          number: shipping.number || "S/N",
+          number: shipping.number && shipping.number !== "S/N" ? shipping.number : "1",
           complement: shipping.complement || "N/A", // PagBank may require it not to be empty
           locality: shipping.locality,
           city: shipping.city,
