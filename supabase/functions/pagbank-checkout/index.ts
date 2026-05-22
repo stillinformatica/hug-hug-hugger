@@ -96,10 +96,11 @@ serve(async (req) => {
 
     if (shipping) {
       checkoutPayload.shipping = {
+        type: "FREE", // PagBank requires a type. Using FREE as it's the most common for simple checkouts, or you can pass it from frontend
         address: {
           street: shipping.street,
           number: shipping.number || "S/N",
-          complement: shipping.complement || "",
+          complement: shipping.complement || "N/A", // PagBank may require it not to be empty
           locality: shipping.locality,
           city: shipping.city,
           region_code: shipping.region_code,
