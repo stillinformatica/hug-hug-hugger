@@ -318,59 +318,6 @@ const Checkout = () => {
     }
   }, [location.search, clearCart]);
 
-  const startPayment = () => {
-    if (paymentRequirementsMessage) {
-      toast.error("Dados incompletos", { description: paymentRequirementsMessage });
-      return;
-    }
-    setBrickError(null);
-    setShowBrick(true);
-  };
-
-  const handleRedirectCheckout = async () => {
-    if (paymentRequirementsMessage) {
-      toast.error("Dados incompletos", { description: paymentRequirementsMessage });
-      return;
-    }
-
-    const ctx = checkoutDataRef.current;
-    setRedirectCheckoutLoading(true);
-
-    try {
-      const { data, error } = await supabase.functions.invoke("mercadopago-create-preference", {
-        body: {
-          items: items.map((item) => ({
-            name: item.name,
-            description: item.description || item.name,
-            quantity: item.quantity,
-            unit_amount: item.price,
-            reference_id: item.productId,
-            image: item.image,
-          })),
-          customer: ctx.customer,
-          shipping: ctx.shipping,
-          shippingCost: shippingPrice,
-        },
-      });
-
-      if (error) throw error;
-
-      const paymentUrl = data?.sandbox_init_point || data?.init_point || data?.payment_url;
-      if (!paymentUrl) {
-        throw new Error("Não foi possível gerar o checkout do Mercado Pago.");
-      }
-
-      window.location.href = paymentUrl;
-    } catch (err) {
-      console.error(err);
-      toast.error("Erro ao abrir checkout do Mercado Pago", {
-        description: err instanceof Error ? err.message : "Tente novamente em instantes",
-      });
-    } finally {
-      setRedirectCheckoutLoading(false);
-    }
-  };
-  
   const handlePagBankCheckout = async () => {
     if (paymentRequirementsMessage) {
       toast.error("Dados incompletos", { description: paymentRequirementsMessage });
@@ -413,6 +360,7 @@ const Checkout = () => {
       setPagBankLoading(false);
     }
   };
+  
 
   useEffect(() => {
     if (!showBrick) return;
