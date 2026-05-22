@@ -1,18 +1,20 @@
-I will fix the integration with Melhor Envio so that orders correctly appear in their dashboard after a purchase.
+I will help you set up PagBank production and fix the AI tips error.
 
-### Changes:
+### 1. PagBank Production Setup
+To move to production, you need to update your credentials and generate a public key:
 
-#### Frontend
-- Update `src/pages/Checkout.tsx` to include the selected shipping service ID in the order data sent to the payment process. This ensures the backend knows which carrier service was chosen (e.g., Sedex, PAC, etc.).
+*   **Update Token:** Go to the project settings (Secrets) and update `PAGBANK_TOKEN` with the production token you generated in iBanking.
+*   **Public Key:** I've created a new function to generate the required production public key. Once you update the token, I will run it for you.
+*   **Production Test:** We will perform a real transaction test to generate the logs requested by PagBank.
 
-#### Backend (Edge Functions)
-- **`calculate-shipping`**:
-    - Fix the product price mapping to use the correct field (`unit_amount`), preventing the "invalid monetary value" error from Melhor Envio.
-    - Update the service selection to use the ID chosen by the customer.
-    - Default to a reasonable service ID if none is provided.
-- **`mercadopago-webhook`**:
-    - Update log messages to correctly reflect "Melhor Envio" instead of "Total Express".
+### 2. Fix AI Tips Error (400)
+The error you saw ("Falha na IA: 400") is likely due to an invalid model name in the tips functions. I will update them to use a stable model.
 
-### Technical Details:
-- The `unitary_value` error was caused by the function looking for `item.price` while the database stores it as `item.unit_amount`.
-- Passing the `shipping_service_id` from the frontend to the backend will ensure the correct label is generated.
+### Technical Details
+*   Deploying `pagbank-public-key` edge function to fetch the production public key.
+*   Updating `marriage-tips` and `growth-tips` edge functions to use `google/gemini-2.0-flash` instead of the non-existent version.
+*   Updating `Checkout.tsx` logic if needed (currently it uses redirect checkout which is simpler for production validation).
+
+### Steps to follow:
+1.  **Update the `PAGBANK_TOKEN`** in your project settings.
+2.  I will then generate the public key and we can perform the test purchase.
