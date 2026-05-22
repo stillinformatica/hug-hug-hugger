@@ -21,6 +21,8 @@ import {
   XCircle,
   Calendar,
   Lock,
+  QrCode,
+  Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -71,11 +73,14 @@ const Checkout = () => {
   const [addressNumber, setAddressNumber] = useState("");
   const [addressComplement, setAddressComplement] = useState("");
 
+  const [paymentMethod, setPaymentMethod] = useState<"CREDIT_CARD" | "PIX">("CREDIT_CARD");
   const [cardNumber, setCardNumber] = useState("");
   const [cardName, setCardName] = useState("");
   const [cardExpiry, setCardExpiry] = useState("");
   const [cardCvv, setCardCvv] = useState("");
   const [installments, setInstallments] = useState("1");
+  const [publicKey, setPublicKey] = useState<string | null>(null);
+  const [pixData, setPixData] = useState<{ text: string; qrCode: string } | null>(null);
 
   const [pagBankLoading, setPagBankLoading] = useState(false);
   const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null);
@@ -177,6 +182,21 @@ const Checkout = () => {
   }, [customerName, customerEmail, customerPhone, customerCpf, addressInfo, addressNumber, addressComplement, cep, items, totalPrice]);
 
   useEffect(() => {
+    const fetchPublicKey = async () => {
+      try {
+        const { data, error } = await supabase.functions.invoke("pagbank-public-key", {
+          body: { type: "card" }
+        });
+        if (error) throw error;
+        setPublicKey(data.public_key);
+      } catch (err) {
+        console.error("Erro ao buscar chave pública:", err);
+      }
+    };
+    fetchPublicKey();
+  }, []);
+
+  useEffect(() => {
     const params = new URLSearchParams(location.search);
     const paymentStatus = params.get("payment");
     const referenceId = params.get("ref") || params.get("external_reference") || "";
@@ -205,7 +225,7 @@ const Checkout = () => {
       return;
     }
 
-    if (!cardNumber || !cardName || !cardExpiry || !cardCvv) {
+    if (paymentMethod === "CREDIT_CARD" && (!cardNumber || !cardName || !cardExpiry || !cardCvv)) {
       toast.error("Dados do cartão incompletos", { description: "Preencha todos os campos do cartão de crédito" });
       return;
     }
@@ -217,24 +237,33 @@ const Checkout = () => {
         throw new Error("O sistema de pagamento não carregou. Recarregue a página.");
       }
 
-      const expiryParts = cardExpiry.split("/");
-      const expMonth = expiryParts[0]?.trim();
-      const expYear = expiryParts[1]?.trim() ? `20${expiryParts[1].trim()}` : "";
+      let encryptedCard = null;
+      if (paymentMethod === "CREDIT_CARD") {
+        if (!publicKey) {
+          throw new Error("Chave de segurança não carregada. Tente novamente em instantes.");
+        }
 
-      const card = window.PagSeguro.encryptCard({
-        publicKey: "39474776-5740-4284-8898-72439777596a", // Token de exemplo (substitua pelo seu se necessário)
-        holder: cardName,
-        number: cardNumber.replace(/\s/g, ""),
-        expMonth: expMonth,
-        expYear: expYear,
-        securityCode: cardCvv,
-      });
+        const expiryParts = cardExpiry.split("/");
+        const expMonth = expiryParts[0]?.trim();
+        const expYear = expiryParts[1]?.trim() ? `20${expiryParts[1].trim()}` : "";
 
-      if (card.errors) {
-        throw new Error("Dados do cartão inválidos. Verifique as informações.");
+        const card = window.PagSeguro.encryptCard({
+          publicKey: publicKey,
+          holder: cardName,
+          number: cardNumber.replace(/\s/g, ""),
+          expMonth: expMonth,
+          expYear: expYear,
+          securityCode: cardCvv,
+        });
+
+        if (card.errors) {
+          console.error("Encryption errors:", card.errors);
+          throw new Error("Dados do cartão inválidos. Verifique as informações.");
+        }
+
+        encryptedCard = card.encryptedCard;
       }
 
-      const encryptedCard = card.encryptedCard;
       const ctx = checkoutDataRef.current;
 
       const { data, error } = await supabase.functions.invoke("pagbank-checkout-transparent", {
@@ -249,10 +278,20 @@ const Checkout = () => {
           shipping: ctx.shipping,
           card_token: encryptedCard,
           installments: parseInt(installments),
+          payment_method: paymentMethod,
         },
       });
 
       if (error) throw error;
+
+      if (paymentMethod === "PIX" && data.qr_code) {
+        const qrCodeImage = data.qr_code.links.find((l: any) => l.rel === "QRCODE")?.href;
+        setPixData({
+          text: data.qr_code.text,
+          qrCode: qrCodeImage || ""
+        });
+        return;
+      }
 
       if (data.status === "PAID" || data.status === "AUTHORIZED" || data.status === "WAITING_PAYMENT" || data.status === "IN_ANALYSIS") {
         setPaymentResult({ 
@@ -273,14 +312,49 @@ const Checkout = () => {
     }
   };
 
-  if (paymentResult) {
+  const copyPixCode = () => {
+    if (pixData) {
+      navigator.clipboard.writeText(pixData.text);
+      toast.success("Código PIX copiado!");
+    }
+  };
+
+  if (paymentResult || pixData) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <StoreHeader searchQuery="" onSearchChange={() => {}} />
         <main className="flex-1 flex items-center justify-center p-4">
           <Card className="max-w-md w-full">
             <CardContent className="pt-6 text-center space-y-4">
-              {paymentResult.status === "approved" ? (
+              {pixData ? (
+                <>
+                  <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto text-primary">
+                    <QrCode className="h-10 w-10" />
+                  </div>
+                  <h2 className="text-2xl font-bold">Pague com PIX</h2>
+                  <p className="text-muted-foreground text-sm">Escaneie o QR Code abaixo ou copie o código para pagar.</p>
+                  
+                  {pixData.qrCode && (
+                    <div className="bg-white p-2 rounded-xl border max-w-[200px] mx-auto">
+                      <img src={pixData.qrCode} alt="QR Code PIX" className="w-full h-auto" />
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label className="text-xs uppercase text-muted-foreground">Código PIX (Copia e Cola)</Label>
+                    <div className="flex gap-2">
+                      <Input value={pixData.text} readOnly className="bg-secondary/30 text-xs" />
+                      <Button size="icon" variant="outline" onClick={copyPixCode}>
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground bg-secondary/20 p-3 rounded-lg">
+                    Após o pagamento, seu pedido será processado automaticamente. Pode levar alguns minutos.
+                  </p>
+                </>
+              ) : paymentResult?.status === "approved" ? (
                 <>
                   <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto text-green-600">
                     <CheckCircle2 className="h-10 w-10" />
@@ -288,7 +362,7 @@ const Checkout = () => {
                   <h2 className="text-2xl font-bold">Pagamento Aprovado!</h2>
                   <p className="text-muted-foreground">Obrigado pela sua compra. Seu pedido #{paymentResult.reference_id} está sendo processado.</p>
                 </>
-              ) : paymentResult.status === "pending" ? (
+              ) : paymentResult?.status === "pending" ? (
                 <>
                   <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto text-blue-600">
                     <Clock className="h-10 w-10" />
@@ -305,7 +379,7 @@ const Checkout = () => {
                   <p className="text-muted-foreground">Houve um problema ao processar seu pagamento. Tente novamente.</p>
                 </>
               )}
-              <Button asChild className="w-full rounded-xl">
+              <Button asChild className="w-full rounded-xl" onClick={() => { if(pixData) clearCart(); }}>
                 <Link to="/">Voltar para a loja</Link>
               </Button>
             </CardContent>
@@ -383,79 +457,115 @@ const Checkout = () => {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
                     <CreditCard className="h-5 w-5 text-primary" />
-                    Dados de Pagamento (Cartão de Crédito)
+                    Forma de Pagamento
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="cardNumber">Número do Cartão</Label>
-                    <div className="relative">
-                      <Input 
-                        id="cardNumber" 
-                        value={cardNumber} 
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, "").replace(/(.{4})/g, "$1 ").trim();
-                          setCardNumber(val.substring(0, 19));
-                        }} 
-                        placeholder="0000 0000 0000 0000" 
-                      />
-                      <CreditCard className="absolute right-3 top-2.5 h-5 w-5 text-muted-foreground opacity-50" />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="cardName">Nome no Cartão</Label>
-                    <Input 
-                      id="cardName" 
-                      value={cardName} 
-                      onChange={(e) => setCardName(e.target.value.toUpperCase())} 
-                      placeholder="COMO ESTÁ NO CARTÃO" 
-                    />
-                  </div>
+                <CardContent className="space-y-6">
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="cardExpiry">Validade</Label>
-                      <div className="relative">
-                        <Input 
-                          id="cardExpiry" 
-                          value={cardExpiry} 
-                          onChange={(e) => {
-                            let val = e.target.value.replace(/\D/g, "");
-                            if (val.length > 2) val = val.substring(0, 2) + "/" + val.substring(2, 4);
-                            setCardExpiry(val);
-                          }} 
-                          placeholder="MM/AA" 
-                          maxLength={5}
-                        />
-                        <Calendar className="absolute right-3 top-2.5 h-5 w-5 text-muted-foreground opacity-50" />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="cardCvv">CVV</Label>
-                      <div className="relative">
-                        <Input 
-                          id="cardCvv" 
-                          type="password"
-                          value={cardCvv} 
-                          onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, "").substring(0, 4))} 
-                          placeholder="123" 
-                        />
-                        <Lock className="absolute right-3 top-2.5 h-5 w-5 text-muted-foreground opacity-50" />
-                      </div>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="installments">Parcelamento</Label>
-                    <select 
-                      id="installments"
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                      value={installments}
-                      onChange={(e) => setInstallments(e.target.value)}
+                    <button
+                      onClick={() => setPaymentMethod("CREDIT_CARD")}
+                      className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all ${
+                        paymentMethod === "CREDIT_CARD" ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border"
+                      }`}
                     >
-                      <option value="1">1x de R$ {totalPrice.toFixed(2).replace(".", ",")} sem juros</option>
-                      {totalPrice > 100 && <option value="2">2x de R$ {(totalPrice / 2).toFixed(2).replace(".", ",")} sem juros</option>}
-                      {totalPrice > 150 && <option value="3">3x de R$ {(totalPrice / 3).toFixed(2).replace(".", ",")} sem juros</option>}
-                    </select>
+                      <CreditCard className={`h-6 w-6 mb-2 ${paymentMethod === "CREDIT_CARD" ? "text-primary" : "text-muted-foreground"}`} />
+                      <span className="text-sm font-medium">Cartão</span>
+                    </button>
+                    <button
+                      onClick={() => setPaymentMethod("PIX")}
+                      className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all ${
+                        paymentMethod === "PIX" ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border"
+                      }`}
+                    >
+                      <QrCode className={`h-6 w-6 mb-2 ${paymentMethod === "PIX" ? "text-primary" : "text-muted-foreground"}`} />
+                      <span className="text-sm font-medium">PIX</span>
+                    </button>
                   </div>
+
+                  {paymentMethod === "CREDIT_CARD" ? (
+                    <div className="space-y-4 pt-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="cardNumber">Número do Cartão</Label>
+                        <div className="relative">
+                          <Input 
+                            id="cardNumber" 
+                            value={cardNumber} 
+                            onChange={(e) => {
+                              const val = e.target.value.replace(/\D/g, "").replace(/(.{4})/g, "$1 ").trim();
+                              setCardNumber(val.substring(0, 19));
+                            }} 
+                            placeholder="0000 0000 0000 0000" 
+                          />
+                          <CreditCard className="absolute right-3 top-2.5 h-5 w-5 text-muted-foreground opacity-50" />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="cardName">Nome no Cartão</Label>
+                        <Input 
+                          id="cardName" 
+                          value={cardName} 
+                          onChange={(e) => setCardName(e.target.value.toUpperCase())} 
+                          placeholder="COMO ESTÁ NO CARTÃO" 
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="cardExpiry">Validade</Label>
+                          <div className="relative">
+                            <Input 
+                              id="cardExpiry" 
+                              value={cardExpiry} 
+                              onChange={(e) => {
+                                let val = e.target.value.replace(/\D/g, "");
+                                if (val.length > 2) val = val.substring(0, 2) + "/" + val.substring(2, 4);
+                                setCardExpiry(val);
+                              }} 
+                              placeholder="MM/AA" 
+                              maxLength={5}
+                            />
+                            <Calendar className="absolute right-3 top-2.5 h-5 w-5 text-muted-foreground opacity-50" />
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="cardCvv">CVV</Label>
+                          <div className="relative">
+                            <Input 
+                              id="cardCvv" 
+                              type="password"
+                              value={cardCvv} 
+                              onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, "").substring(0, 4))} 
+                              placeholder="123" 
+                            />
+                            <Lock className="absolute right-3 top-2.5 h-5 w-5 text-muted-foreground opacity-50" />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="installments">Parcelamento</Label>
+                        <select 
+                          id="installments"
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                          value={installments}
+                          onChange={(e) => setInstallments(e.target.value)}
+                        >
+                          <option value="1">1x de R$ {totalPrice.toFixed(2).replace(".", ",")} sem juros</option>
+                          {totalPrice > 100 && <option value="2">2x de R$ {(totalPrice / 2).toFixed(2).replace(".", ",")} sem juros</option>}
+                          {totalPrice > 150 && <option value="3">3x de R$ {(totalPrice / 3).toFixed(2).replace(".", ",")} sem juros</option>}
+                        </select>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="pt-4 space-y-4">
+                      <div className="flex items-start gap-3 p-4 bg-primary/5 rounded-xl border border-primary/20">
+                        <div className="h-6 w-6 rounded-full bg-primary text-white flex items-center justify-center flex-shrink-0 text-xs font-bold">1</div>
+                        <p className="text-sm">O PIX é processado instantaneamente.</p>
+                      </div>
+                      <div className="flex items-start gap-3 p-4 bg-primary/5 rounded-xl border border-primary/20">
+                        <div className="h-6 w-6 rounded-full bg-primary text-white flex items-center justify-center flex-shrink-0 text-xs font-bold">2</div>
+                        <p className="text-sm">O QR Code e o código "Copia e Cola" serão gerados após clicar em finalizar.</p>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </motion.div>
