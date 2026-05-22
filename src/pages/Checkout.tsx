@@ -43,140 +43,12 @@ interface AddressInfo {
 type PaymentResult = {
   status: "approved" | "pending" | "rejected" | "in_process";
   reference_id: string;
-  qr_code?: string;
-  qr_code_base64?: string;
-  ticket_url?: string;
-  boleto_url?: string;
 };
-
-const BRICK_INIT_FAILURE_MESSAGE = "O formulário do Mercado Pago não foi liberado para esta aplicação ou domínio. Você pode continuar pelo checkout seguro do Mercado Pago enquanto ajusta a configuração da aplicação.";
-
-const normalizeMpErrorMessage = (error: unknown) => {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === "string") return error;
-  if (error && typeof error === "object") {
-    const maybeMessage = [
-      (error as { message?: string }).message,
-      (error as { error?: string }).error,
-      (error as { cause?: { message?: string } }).cause?.message,
-    ].find((value) => typeof value === "string" && value.trim().length > 0);
-
-    if (maybeMessage) return maybeMessage;
-
-    try {
-      return JSON.stringify(error);
-    } catch {
-      return "Erro desconhecido ao carregar o pagamento";
-    }
-  }
-
-  return "Erro desconhecido ao carregar o pagamento";
-};
-
-const getBrickErrorMessage = (error: unknown) => {
-  const message = normalizeMpErrorMessage(error);
-  const lowerMessage = message.toLowerCase();
-
-  if (
-    lowerMessage.includes("bricks component initialization failed") ||
-    lowerMessage.includes("payment_methods/search") ||
-    lowerMessage.includes("404") ||
-    lowerMessage.includes("403")
-  ) {
-    if (lowerMessage.includes("404") || lowerMessage.includes("payment_methods")) {
-      return "Erro de credenciais no Mercado Pago (404). Por favor, verifique se o Public Key está correto e se a conta está ativa.";
-    }
-    return BRICK_INIT_FAILURE_MESSAGE;
-  }
-
-  return message;
-};
-
-const SDK_URL = "https://sdk.mercadopago.com/js/v2";
-const SDK_LOAD_TIMEOUT_MS = 15000;
-const BRICK_LOAD_TIMEOUT_MS = 20000;
-
-const loadMpSdk = (() => {
-  let promise: Promise<void> | null = null;
-
-  const waitForMercadoPago = (timeoutMs: number) => new Promise<void>((resolve, reject) => {
-    const startedAt = Date.now();
-
-    const check = () => {
-      if ((window as any).MercadoPago) {
-        resolve();
-        return;
-      }
-
-      if (Date.now() - startedAt >= timeoutMs) {
-        reject(new Error("O formulário de pagamento demorou para carregar"));
-        return;
-      }
-
-      window.setTimeout(check, 100);
-    };
-
-    check();
-  });
-
-  return () => {
-    if (promise) return promise;
-
-    promise = new Promise<void>((resolve, reject) => {
-      if (typeof window === "undefined") {
-        reject(new Error("window indisponível"));
-        return;
-      }
-
-      if ((window as any).MercadoPago) {
-        resolve();
-        return;
-      }
-
-      const existing = document.querySelector<HTMLScriptElement>(`script[src="${SDK_URL}"]`);
-
-      const finish = () => {
-        waitForMercadoPago(SDK_LOAD_TIMEOUT_MS).then(resolve).catch(reject);
-      };
-
-      if (existing) {
-        if (existing.dataset.loaded === "true") {
-          finish();
-          return;
-        }
-
-        existing.addEventListener("load", () => {
-          existing.dataset.loaded = "true";
-          finish();
-        }, { once: true });
-        existing.addEventListener("error", () => reject(new Error("Falha ao carregar SDK Mercado Pago")), { once: true });
-        window.setTimeout(finish, 300);
-        return;
-      }
-
-      const script = document.createElement("script");
-      script.src = SDK_URL;
-      script.async = true;
-      script.onload = () => {
-        script.dataset.loaded = "true";
-        finish();
-      };
-      script.onerror = () => reject(new Error("Falha ao carregar SDK Mercado Pago"));
-      document.head.appendChild(script);
-    }).catch((error) => {
-      promise = null;
-      throw error;
-    });
-
-    return promise;
-  };
-})();
 
 const Checkout = () => {
   const { items, clearCart } = useCartStore();
   const location = useLocation();
 
-  const [searchQuery, setSearchQuery] = useState("");
   const [cep, setCep] = useState("");
   const [addressInfo, setAddressInfo] = useState<AddressInfo | null>(null);
   const [shippingOptions, setShippingOptions] = useState<ShippingOption[]>([]);
@@ -191,14 +63,9 @@ const Checkout = () => {
   const [addressNumber, setAddressNumber] = useState("");
   const [addressComplement, setAddressComplement] = useState("");
 
-  const [showBrick, setShowBrick] = useState(false);
-  const [brickLoading, setBrickLoading] = useState(false);
-  const [brickError, setBrickError] = useState<string | null>(null);
-  const [redirectCheckoutLoading, setRedirectCheckoutLoading] = useState(false);
   const [pagBankLoading, setPagBankLoading] = useState(false);
   const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null);
 
-  const brickControllerRef = useRef<any>(null);
   const checkoutDataRef = useRef<any>(null);
 
   const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -246,12 +113,12 @@ const Checkout = () => {
       setSelectedShipping(data.shipping_options?.[0]?.id || null);
 
       if (data.shipping_options.length === 1 && data.shipping_options[0].id === "standard_shipping") {
-        setShippingError("A Total Express retornou 'Acesso Negado! Seu IP foi arquivado'. O suporte da transportadora precisa liberar o acesso para servidores em nuvem.");
+        setShippingError("A Total Express retornou 'Acesso Negado!'. O suporte da transportadora precisa liberar o acesso.");
       }
     } catch (err) {
       console.error(err);
       const errorMessage = err instanceof Error ? err.message : "Erro desconhecido";
-      setShippingError(`Erro ao calcular frete na Total Express: ${errorMessage}. O IP do servidor pode estar bloqueado.`);
+      setShippingError(`Erro ao calcular frete: ${errorMessage}.`);
       toast.error("Erro ao calcular frete", { description: "Verifique o CEP e tente novamente" });
     } finally {
       setIsLoadingShipping(false);
@@ -318,59 +185,6 @@ const Checkout = () => {
     }
   }, [location.search, clearCart]);
 
-  const startPayment = () => {
-    if (paymentRequirementsMessage) {
-      toast.error("Dados incompletos", { description: paymentRequirementsMessage });
-      return;
-    }
-    setBrickError(null);
-    setShowBrick(true);
-  };
-
-  const handleRedirectCheckout = async () => {
-    if (paymentRequirementsMessage) {
-      toast.error("Dados incompletos", { description: paymentRequirementsMessage });
-      return;
-    }
-
-    const ctx = checkoutDataRef.current;
-    setRedirectCheckoutLoading(true);
-
-    try {
-      const { data, error } = await supabase.functions.invoke("mercadopago-create-preference", {
-        body: {
-          items: items.map((item) => ({
-            name: item.name,
-            description: item.description || item.name,
-            quantity: item.quantity,
-            unit_amount: item.price,
-            reference_id: item.productId,
-            image: item.image,
-          })),
-          customer: ctx.customer,
-          shipping: ctx.shipping,
-          shippingCost: shippingPrice,
-        },
-      });
-
-      if (error) throw error;
-
-      const paymentUrl = data?.sandbox_init_point || data?.init_point || data?.payment_url;
-      if (!paymentUrl) {
-        throw new Error("Não foi possível gerar o checkout do Mercado Pago.");
-      }
-
-      window.location.href = paymentUrl;
-    } catch (err) {
-      console.error(err);
-      toast.error("Erro ao abrir checkout do Mercado Pago", {
-        description: err instanceof Error ? err.message : "Tente novamente em instantes",
-      });
-    } finally {
-      setRedirectCheckoutLoading(false);
-    }
-  };
-  
   const handlePagBankCheckout = async () => {
     if (paymentRequirementsMessage) {
       toast.error("Dados incompletos", { description: paymentRequirementsMessage });
@@ -399,8 +213,7 @@ const Checkout = () => {
 
       const paymentUrl = data?.payment_url || data?.links?.find((l: any) => l.rel === "PAY")?.href;
       if (!paymentUrl) {
-        console.error("PagBank response without payment URL:", data);
-        throw new Error("Não foi possível gerar o link de pagamento do PagBank. Verifique as credenciais.");
+        throw new Error("Não foi possível gerar o link de pagamento do PagBank.");
       }
 
       window.location.href = paymentUrl;
@@ -414,262 +227,41 @@ const Checkout = () => {
     }
   };
 
-  useEffect(() => {
-    if (!showBrick) return;
-    let cancelled = false;
-
-    const init = async () => {
-      setBrickLoading(true);
-      try {
-        if (!customerEmail || !/^\S+@\S+\.\S+$/.test(customerEmail)) {
-          throw new Error("E-mail inválido. Volte e preencha um e-mail válido.");
-        }
-        if (!totalPrice || totalPrice <= 0) {
-          throw new Error("Valor do pedido inválido.");
-        }
-
-        console.log("[MP Brick] Iniciando. amount=", totalPrice, "email=", customerEmail);
-        await loadMpSdk();
-        console.log("[MP Brick] SDK carregado");
-
-        const { data: keyData, error: keyErr } = await supabase.functions.invoke("mercadopago-public-key");
-        if (keyErr) throw keyErr;
-        const publicKey = keyData?.public_key;
-        if (!publicKey) throw new Error("Chave pública do Mercado Pago não configurada");
-        
-        if (publicKey.length > 60 && publicKey.startsWith("APP_USR-")) {
-          console.error("[MP Brick] A chave pública parece ser um Token de Acesso. Verifique as configurações.");
-          throw new Error("A chave pública configurada parece ser um Token de Acesso. Por favor, verifique se você não inverteu o Public Key e o Access Token nas configurações.");
-        }
-        
-        console.log("[MP Brick] Public key OK");
-
-        if (cancelled) return;
-
-        let container: HTMLElement | null = null;
-        for (let i = 0; i < 50; i++) {
-          container = document.getElementById("mp-payment-brick");
-          if (container) break;
-          await new Promise((r) => setTimeout(r, 50));
-        }
-        if (!container) throw new Error("Container do pagamento não encontrado");
-        container.innerHTML = "";
-        console.log("[MP Brick] Container pronto");
-
-        const mp = new (window as any).MercadoPago(publicKey, { locale: "pt-BR" });
-        const bricksBuilder = mp.bricks();
-
-        let readyResolved = false;
-        const readyFallback = window.setTimeout(() => {
-          if (!readyResolved && container && container.children.length > 0) {
-            readyResolved = true;
-            setBrickLoading(false);
-          }
-        }, 4000);
-        const controller = await Promise.race([
-          bricksBuilder.create("payment", "mp-payment-brick", {
-            initialization: {
-              amount: Number(totalPrice.toFixed(2)),
-              payer: { email: customerEmail },
-            },
-            customization: {
-              paymentMethods: {
-                creditCard: "all",
-                debitCard: "all",
-                bankTransfer: "all",
-                ticket: "all",
-                maxInstallments: 12,
-              },
-              visual: { style: { theme: "default" } },
-            },
-            callbacks: {
-              onReady: () => {
-                readyResolved = true;
-                window.clearTimeout(readyFallback);
-                setBrickLoading(false);
-              },
-              onSubmit: async ({ formData }: { formData: any }) => {
-                const ctx = checkoutDataRef.current;
-                try {
-                  const { data, error } = await supabase.functions.invoke("mercadopago-process-payment", {
-                    body: {
-                      formData,
-                      items: ctx.items,
-                      customer: ctx.customer,
-                      shipping: ctx.shipping,
-                      totalAmount: ctx.totalAmount,
-                    },
-                  });
-                  if (error) throw error;
-                  if (data?.error) throw new Error(data.error);
-
-                  const status = data.status as PaymentResult["status"];
-                  setPaymentResult({
-                    status,
-                    reference_id: data.reference_id,
-                    qr_code: data.qr_code,
-                    qr_code_base64: data.qr_code_base64,
-                    ticket_url: data.ticket_url,
-                    boleto_url: data.boleto_url,
-                  });
-                  if (status === "approved") {
-                    clearCart();
-                    toast.success("Pagamento aprovado!");
-                  } else if (status === "pending" || status === "in_process") {
-                    toast.info("Pagamento em processamento");
-                  } else {
-                    if (data.is_high_risk) {
-                      toast.error("O Mercado Pago recusou o pagamento por segurança.", {
-                        description: "Isso ocorre quando o sistema deles detecta um risco na transação. Recomendamos clicar no botão 'Checkout Externo' abaixo para pagar com mais segurança diretamente no site deles.",
-                        duration: 10000,
-                      });
-                    } else {
-                      toast.error("Pagamento não aprovado");
-                    }
-                  }
-                } catch (err) {
-                  console.error(err);
-                  toast.error("Erro ao processar pagamento", {
-                    description: err instanceof Error ? err.message : "Tente novamente",
-                  });
-                  throw err;
-                }
-              },
-              onError: (error: any) => {
-                console.error("Brick error:", error);
-                setBrickLoading(false);
-                setBrickError(getBrickErrorMessage(error));
-              },
-            },
-          }),
-          new Promise<never>((_, reject) => {
-            window.setTimeout(() => {
-              if (!readyResolved) {
-                reject(new Error(BRICK_INIT_FAILURE_MESSAGE));
-              }
-            }, BRICK_LOAD_TIMEOUT_MS);
-          }),
-        ]);
-
-        brickControllerRef.current = controller;
-        window.setTimeout(() => {
-          if (!cancelled) setBrickLoading(false);
-        }, 1500);
-      } catch (err) {
-        console.error(err);
-        if (!cancelled) {
-          setBrickError(getBrickErrorMessage(err));
-          setBrickLoading(false);
-        }
-      }
-    };
-
-    init();
-
-    return () => {
-      cancelled = true;
-      try {
-        brickControllerRef.current?.unmount?.();
-      } catch (_) { /* noop */ }
-      brickControllerRef.current = null;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showBrick]);
-
   if (paymentResult) {
-    const isSuccess = paymentResult.status === "approved";
-    const isPending = paymentResult.status === "pending" || paymentResult.status === "in_process";
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <StoreHeader searchQuery={searchQuery} onSearchChange={setSearchQuery} />
-        <main className="flex-1 max-w-2xl mx-auto px-4 py-8 w-full">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                {isSuccess ? (
-                  <CheckCircle2 className="h-6 w-6 text-primary" />
-                ) : isPending ? (
-                  <Clock className="h-6 w-6 text-primary" />
-                ) : (
-                  <XCircle className="h-6 w-6 text-destructive" />
-                )}
-                {isSuccess
-                  ? "Pagamento Aprovado!"
-                  : isPending
-                    ? "Pagamento Pendente"
-                    : "Pagamento não concluído"}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {isSuccess && (
-                <p className="text-muted-foreground">
-                  Recebemos seu pagamento (pedido {paymentResult.reference_id}). Em breve você receberá um e-mail com os detalhes do envio.
-                </p>
+        <StoreHeader searchQuery="" onSearchChange={() => {}} />
+        <main className="flex-1 flex items-center justify-center p-4">
+          <Card className="max-w-md w-full">
+            <CardContent className="pt-6 text-center space-y-4">
+              {paymentResult.status === "approved" ? (
+                <>
+                  <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto text-green-600">
+                    <CheckCircle2 className="h-10 w-10" />
+                  </div>
+                  <h2 className="text-2xl font-bold">Pagamento Aprovado!</h2>
+                  <p className="text-muted-foreground">Obrigado pela sua compra. Seu pedido #{paymentResult.reference_id} está sendo processado.</p>
+                </>
+              ) : paymentResult.status === "pending" ? (
+                <>
+                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto text-blue-600">
+                    <Clock className="h-10 w-10" />
+                  </div>
+                  <h2 className="text-2xl font-bold">Pagamento em Processamento</h2>
+                  <p className="text-muted-foreground">Estamos aguardando a confirmação do seu pagamento.</p>
+                </>
+              ) : (
+                <>
+                  <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto text-red-600">
+                    <XCircle className="h-10 w-10" />
+                  </div>
+                  <h2 className="text-2xl font-bold">Falha no Pagamento</h2>
+                  <p className="text-muted-foreground">Houve um problema ao processar seu pagamento. Tente novamente.</p>
+                </>
               )}
-              {isPending && paymentResult.qr_code_base64 && (
-                <div className="space-y-3 text-center">
-                  <p className="text-sm text-muted-foreground">Escaneie o QR Code para pagar com PIX:</p>
-                  <img
-                    src={`data:image/png;base64,${paymentResult.qr_code_base64}`}
-                    alt="QR Code PIX"
-                    className="mx-auto w-64 h-64 border rounded-xl"
-                  />
-                  {paymentResult.qr_code && (
-                    <div className="space-y-2">
-                      <p className="text-xs text-muted-foreground">Ou copie o código:</p>
-                      <code className="block p-2 bg-secondary rounded text-xs break-all">
-                        {paymentResult.qr_code}
-                      </code>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          navigator.clipboard.writeText(paymentResult.qr_code!);
-                          toast.success("Código copiado");
-                        }}
-                      >
-                        Copiar código PIX
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              )}
-              {isPending && paymentResult.boleto_url && (
-                <div className="text-center space-y-2">
-                  <p className="text-sm text-muted-foreground">Boleto gerado com sucesso.</p>
-                  <a href={paymentResult.boleto_url} target="_blank" rel="noopener noreferrer">
-                    <Button variant="outline">Abrir boleto</Button>
-                  </a>
-                </div>
-              )}
-              {isPending && !paymentResult.qr_code_base64 && !paymentResult.boleto_url && (
-                <p className="text-muted-foreground">
-                  Seu pagamento está sendo processado. Assim que for confirmado, enviaremos um e-mail.
-                </p>
-              )}
-              {!isSuccess && !isPending && (
-                <p className="text-muted-foreground">
-                  O pagamento não foi concluído. Você pode tentar novamente.
-                </p>
-              )}
-              <div className="flex gap-2">
-                <Link to="/" className="flex-1">
-                  <Button variant="outline" className="w-full">
-                    <ArrowLeft className="mr-2 h-4 w-4" /> Voltar à loja
-                  </Button>
-                </Link>
-                {!isSuccess && !isPending && (
-                  <Button
-                    className="flex-1"
-                    onClick={() => {
-                      setPaymentResult(null);
-                      setShowBrick(true);
-                    }}
-                  >
-                    Tentar novamente
-                  </Button>
-                )}
-              </div>
+              <Button asChild className="w-full rounded-xl">
+                <Link to="/">Voltar para a loja</Link>
+              </Button>
             </CardContent>
           </Card>
         </main>
@@ -681,14 +273,14 @@ const Checkout = () => {
   if (items.length === 0) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
-        <StoreHeader searchQuery={searchQuery} onSearchChange={setSearchQuery} />
-        <div className="flex-1 flex items-center justify-center flex-col gap-4">
-          <ShoppingCart className="h-16 w-16 text-muted-foreground opacity-30" />
-          <p className="text-xl text-muted-foreground">Seu carrinho está vazio</p>
-          <Link to="/">
-            <Button variant="outline"><ArrowLeft className="mr-2 h-4 w-4" />Continuar comprando</Button>
-          </Link>
-        </div>
+        <StoreHeader searchQuery="" onSearchChange={() => {}} />
+        <main className="flex-1 flex flex-col items-center justify-center p-4 gap-4">
+          <ShoppingCart className="h-16 w-16 text-muted-foreground opacity-20" />
+          <h2 className="text-xl font-semibold">Seu carrinho está vazio</h2>
+          <Button asChild className="rounded-xl">
+            <Link to="/">Ver produtos</Link>
+          </Button>
+        </main>
         <StoreFooter />
       </div>
     );
@@ -696,7 +288,7 @@ const Checkout = () => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <StoreHeader searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+      <StoreHeader searchQuery="" onSearchChange={() => {}} />
 
       <main className="flex-1 max-w-[1600px] mx-auto px-4 py-8 w-full">
         <Link to="/" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-primary mb-6 transition-colors">
@@ -812,103 +404,36 @@ const Checkout = () => {
                   {shippingOptions.length > 0 && (
                     <div className="space-y-2">
                       <Label className="flex items-center gap-2"><Truck className="h-4 w-4" /> Opções de Envio</Label>
-                      {shippingOptions.map((option) => {
-                        const isMercadoEnvios = option.name.toLowerCase().includes("mercado envios") || option.description.toLowerCase().includes("mercado envios");
-                        const isTotalExpress = option.name.toLowerCase().includes("total express") || option.description.toLowerCase().includes("total express");
-                        
-                        return (
-                          <button
-                            key={option.id}
-                            onClick={() => setSelectedShipping(option.id)}
-                            className={`w-full p-4 rounded-xl border text-left transition-all duration-200 ${
-                              selectedShipping === option.id
-                                ? "border-primary bg-primary/5 ring-1 ring-primary"
-                                : "border-border hover:border-primary/50 hover:bg-secondary/20"
-                            }`}
-                          >
-                            <div className="flex justify-between items-start gap-4">
-                              <div className="space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <p className="font-semibold text-foreground text-sm">{option.name}</p>
-                                  {isMercadoEnvios && (
-                                    <Badge variant="outline" className="bg-[#FFE600] text-[#2D3277] border-none font-bold text-[10px] px-1.5 h-5">
-                                      MERCADO ENVIOS
-                                    </Badge>
-                                  )}
-                                  {isTotalExpress && (
-                                    <Badge variant="outline" className="bg-blue-600 text-white border-none font-bold text-[10px] px-1.5 h-5">
-                                      TOTAL EXPRESS
-                                    </Badge>
-                                  )}
-                                </div>
-                                <p className="text-xs text-muted-foreground flex items-center gap-1">
-                                  <Clock className="h-3 w-3" /> {option.estimated_days} dias úteis
-                                </p>
-                                {option.description && (
-                                  <p className="text-[10px] text-muted-foreground/80">{option.description}</p>
-                                )}
-                              </div>
-                              <div className="text-right">
-                                <span className="font-bold text-primary text-base">
-                                  {option.price === 0 ? "GRÁTIS" : `R$ ${option.price.toFixed(2)}`}
-                                </span>
-                              </div>
+                      {shippingOptions.map((option) => (
+                        <button
+                          key={option.id}
+                          onClick={() => setSelectedShipping(option.id)}
+                          className={`w-full p-4 rounded-xl border text-left transition-all duration-200 ${
+                            selectedShipping === option.id
+                              ? "border-primary bg-primary/5 ring-1 ring-primary"
+                              : "border-border hover:border-primary/50 hover:bg-secondary/20"
+                          }`}
+                        >
+                          <div className="flex justify-between items-start gap-4">
+                            <div className="space-y-1">
+                              <p className="font-semibold text-foreground text-sm">{option.name}</p>
+                              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Clock className="h-3 w-3" /> {option.estimated_days} dias úteis
+                              </p>
                             </div>
-                          </button>
-                        );
-                      })}
+                            <div className="text-right">
+                              <span className="font-bold text-primary text-base">
+                                {option.price === 0 ? "GRÁTIS" : `R$ ${option.price.toFixed(2)}`}
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+                      ))}
                     </div>
                   )}
                 </CardContent>
               </Card>
             </motion.div>
-
-            {showBrick && (
-              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <CreditCard className="h-5 w-5 text-primary" />
-                      Pagamento Seguro
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {brickLoading && !brickError && (
-                      <div className="flex items-center justify-center py-8 gap-2 text-muted-foreground">
-                        <Loader2 className="h-5 w-5 animate-spin" />
-                        Carregando formulário de pagamento...
-                      </div>
-                    )}
-                    {brickError && (
-                      <div className="text-center py-6 space-y-3">
-                        <p className="text-destructive text-sm whitespace-pre-wrap break-words">{brickError}</p>
-                        <div className="flex flex-col sm:flex-row gap-2 justify-center">
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              setBrickError(null);
-                              setBrickLoading(false);
-                              setShowBrick(false);
-                              setTimeout(() => setShowBrick(true), 50);
-                            }}
-                          >
-                            Recarregar
-                          </Button>
-                          <Button
-                            onClick={handleRedirectCheckout}
-                            disabled={redirectCheckoutLoading}
-                          >
-                            {redirectCheckoutLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                            Abrir checkout do Mercado Pago
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                    <div id="mp-payment-brick" />
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )}
           </div>
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
@@ -957,49 +482,29 @@ const Checkout = () => {
                   <span className="text-xl font-bold text-primary">R$ {totalPrice.toFixed(2).replace(".", ",")}</span>
                 </div>
 
-                {!showBrick && (
-                  <div className="space-y-3">
-                    <Button
-                      onClick={handlePagBankCheckout}
-                      size="lg"
-                      className="w-full rounded-xl bg-[#009EE3] hover:bg-[#008AC0] text-white font-bold h-14"
-                      disabled={!!paymentRequirementsMessage || pagBankLoading}
-                    >
-                      {pagBankLoading ? (
-                        <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                      ) : (
-                        <img 
-                          src="https://assets.pagseguro.com.br/ps-bootstrap/v6.63.1/img/pagseguro/logo-pagseguro.png" 
-                          alt="PagSeguro" 
-                          className="h-6 mr-2 invert brightness-0"
-                        />
-                      )}
-                      Pagar com PagSeguro
-                    </Button>
-
-                    <div className="relative">
-                      <div className="absolute inset-0 flex items-center">
-                        <span className="w-full border-t" />
-                      </div>
-                      <div className="relative flex justify-center text-xs uppercase">
-                        <span className="bg-background px-2 text-muted-foreground">Ou use</span>
-                      </div>
-                    </div>
-
-                    <Button
-                      onClick={startPayment}
-                      variant="outline"
-                      className="w-full rounded-xl"
-                      disabled={!!paymentRequirementsMessage}
-                    >
-                      <CreditCard className="h-4 w-4 mr-2" /> Mercado Pago (Checkout no site)
-                    </Button>
-                    
-                    <p className="text-xs text-center min-h-4 text-muted-foreground">
-                      {paymentRequirementsMessage ?? "Pagamento seguro e garantido."}
-                    </p>
-                  </div>
-                )}
+                <div className="space-y-3">
+                  <Button
+                    onClick={handlePagBankCheckout}
+                    size="lg"
+                    className="w-full rounded-xl bg-[#009EE3] hover:bg-[#008AC0] text-white font-bold h-14"
+                    disabled={!!paymentRequirementsMessage || pagBankLoading}
+                  >
+                    {pagBankLoading ? (
+                      <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                    ) : (
+                      <img 
+                        src="https://assets.pagseguro.com.br/ps-bootstrap/v6.63.1/img/pagseguro/logo-pagseguro.png" 
+                        alt="PagSeguro" 
+                        className="h-6 mr-2 invert brightness-0"
+                      />
+                    )}
+                    Finalizar com PagSeguro
+                  </Button>
+                  
+                  <p className="text-xs text-center min-h-4 text-muted-foreground">
+                    {paymentRequirementsMessage ?? "Pagamento seguro e garantido via PagBank."}
+                  </p>
+                </div>
               </CardContent>
             </Card>
           </motion.div>
