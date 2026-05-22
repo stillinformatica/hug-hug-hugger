@@ -213,9 +213,8 @@ const Checkout = () => {
     setPagBankLoading(true);
 
     try {
-      // 1. Encrypt card data using PagBank SDK
       if (!window.PagSeguro) {
-        throw new Error("O sistema de pagamento não carregou corretamente. Recarregue a página.");
+        throw new Error("O sistema de pagamento não carregou. Recarregue a página.");
       }
 
       const expiryParts = cardExpiry.split("/");
@@ -223,7 +222,7 @@ const Checkout = () => {
       const expYear = expiryParts[1]?.trim() ? `20${expiryParts[1].trim()}` : "";
 
       const card = window.PagSeguro.encryptCard({
-        publicKey: "YOUR_PAGBANK_PUBLIC_KEY", // This should be a client-side public key
+        publicKey: "39474776-5740-4284-8898-72439777596a", // Token de exemplo (substitua pelo seu se necessário)
         holder: cardName,
         number: cardNumber.replace(/\s/g, ""),
         expMonth: expMonth,
@@ -232,14 +231,12 @@ const Checkout = () => {
       });
 
       if (card.errors) {
-        console.error("Card encryption errors:", card.errors);
-        throw new Error("Dados do cartão inválidos. Verifique as informações digitadas.");
+        throw new Error("Dados do cartão inválidos. Verifique as informações.");
       }
 
       const encryptedCard = card.encryptedCard;
       const ctx = checkoutDataRef.current;
 
-      // 2. Send encrypted data to our backend edge function
       const { data, error } = await supabase.functions.invoke("pagbank-checkout-transparent", {
         body: {
           items: items.map((item) => ({
@@ -257,19 +254,19 @@ const Checkout = () => {
 
       if (error) throw error;
 
-      if (data.status === "PAID" || data.status === "AUTHORIZED") {
-        setPaymentResult({ status: "approved", reference_id: data.reference_id });
+      if (data.status === "PAID" || data.status === "AUTHORIZED" || data.status === "WAITING_PAYMENT" || data.status === "IN_ANALYSIS") {
+        setPaymentResult({ 
+          status: (data.status === "PAID" || data.status === "AUTHORIZED") ? "approved" : "pending", 
+          reference_id: data.reference_id 
+        });
         clearCart();
-      } else if (data.status === "WAITING_PAYMENT" || data.status === "IN_ANALYSIS") {
-        setPaymentResult({ status: "pending", reference_id: data.reference_id });
       } else {
-        throw new Error(`O pagamento foi ${data.status || 'recusado'}.`);
+        throw new Error(`O pagamento foi recusado. Status: ${data.status}`);
       }
-
     } catch (err) {
       console.error(err);
-      toast.error("Erro no processamento do pagamento", {
-        description: err instanceof Error ? err.message : "Verifique os dados do cartão e tente novamente",
+      toast.error("Erro no pagamento", {
+        description: err instanceof Error ? err.message : "Tente novamente",
       });
     } finally {
       setPagBankLoading(false);
