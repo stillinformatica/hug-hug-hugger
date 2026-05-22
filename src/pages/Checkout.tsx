@@ -19,11 +19,19 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
+  Calendar,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
+
+declare global {
+  interface Window {
+    PagSeguro?: any;
+  }
+}
 
 interface ShippingOption {
   id: string;
@@ -62,6 +70,12 @@ const Checkout = () => {
   const [customerCpf, setCustomerCpf] = useState("");
   const [addressNumber, setAddressNumber] = useState("");
   const [addressComplement, setAddressComplement] = useState("");
+
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardName, setCardName] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCvv, setCardCvv] = useState("");
+  const [installments, setInstallments] = useState("1");
 
   const [pagBankLoading, setPagBankLoading] = useState(false);
   const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null);
@@ -191,36 +205,68 @@ const Checkout = () => {
       return;
     }
 
-    const ctx = checkoutDataRef.current;
+    if (!cardNumber || !cardName || !cardExpiry || !cardCvv) {
+      toast.error("Dados do cartão incompletos", { description: "Preencha todos os campos do cartão de crédito" });
+      return;
+    }
+
     setPagBankLoading(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke("pagbank-checkout", {
+      if (!window.PagSeguro) {
+        throw new Error("O sistema de pagamento não carregou. Recarregue a página.");
+      }
+
+      const expiryParts = cardExpiry.split("/");
+      const expMonth = expiryParts[0]?.trim();
+      const expYear = expiryParts[1]?.trim() ? `20${expiryParts[1].trim()}` : "";
+
+      const card = window.PagSeguro.encryptCard({
+        publicKey: "39474776-5740-4284-8898-72439777596a", // Token de exemplo (substitua pelo seu se necessário)
+        holder: cardName,
+        number: cardNumber.replace(/\s/g, ""),
+        expMonth: expMonth,
+        expYear: expYear,
+        securityCode: cardCvv,
+      });
+
+      if (card.errors) {
+        throw new Error("Dados do cartão inválidos. Verifique as informações.");
+      }
+
+      const encryptedCard = card.encryptedCard;
+      const ctx = checkoutDataRef.current;
+
+      const { data, error } = await supabase.functions.invoke("pagbank-checkout-transparent", {
         body: {
           items: items.map((item) => ({
             name: item.name,
-            description: item.description || item.name,
             quantity: item.quantity,
             unit_amount: item.price,
             productId: item.productId,
           })),
           customer: ctx.customer,
           shipping: ctx.shipping,
+          card_token: encryptedCard,
+          installments: parseInt(installments),
         },
       });
 
       if (error) throw error;
 
-      const paymentUrl = data?.payment_url || data?.links?.find((l: any) => l.rel === "PAY")?.href;
-      if (!paymentUrl) {
-        throw new Error("Não foi possível gerar o link de pagamento do PagBank.");
+      if (data.status === "PAID" || data.status === "AUTHORIZED" || data.status === "WAITING_PAYMENT" || data.status === "IN_ANALYSIS") {
+        setPaymentResult({ 
+          status: (data.status === "PAID" || data.status === "AUTHORIZED") ? "approved" : "pending", 
+          reference_id: data.reference_id 
+        });
+        clearCart();
+      } else {
+        throw new Error(`O pagamento foi recusado. Status: ${data.status}`);
       }
-
-      window.location.href = paymentUrl;
     } catch (err) {
       console.error(err);
-      toast.error("Erro ao abrir checkout do PagBank", {
-        description: err instanceof Error ? err.message : "Tente novamente em instantes",
+      toast.error("Erro no pagamento", {
+        description: err instanceof Error ? err.message : "Tente novamente",
       });
     } finally {
       setPagBankLoading(false);
@@ -327,6 +373,88 @@ const Checkout = () => {
                       <Label htmlFor="cpf">CPF *</Label>
                       <Input id="cpf" value={customerCpf} onChange={(e) => setCustomerCpf(e.target.value)} placeholder="000.000.000-00" />
                     </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <CreditCard className="h-5 w-5 text-primary" />
+                    Dados de Pagamento (Cartão de Crédito)
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="cardNumber">Número do Cartão</Label>
+                    <div className="relative">
+                      <Input 
+                        id="cardNumber" 
+                        value={cardNumber} 
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "").replace(/(.{4})/g, "$1 ").trim();
+                          setCardNumber(val.substring(0, 19));
+                        }} 
+                        placeholder="0000 0000 0000 0000" 
+                      />
+                      <CreditCard className="absolute right-3 top-2.5 h-5 w-5 text-muted-foreground opacity-50" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="cardName">Nome no Cartão</Label>
+                    <Input 
+                      id="cardName" 
+                      value={cardName} 
+                      onChange={(e) => setCardName(e.target.value.toUpperCase())} 
+                      placeholder="COMO ESTÁ NO CARTÃO" 
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="cardExpiry">Validade</Label>
+                      <div className="relative">
+                        <Input 
+                          id="cardExpiry" 
+                          value={cardExpiry} 
+                          onChange={(e) => {
+                            let val = e.target.value.replace(/\D/g, "");
+                            if (val.length > 2) val = val.substring(0, 2) + "/" + val.substring(2, 4);
+                            setCardExpiry(val);
+                          }} 
+                          placeholder="MM/AA" 
+                          maxLength={5}
+                        />
+                        <Calendar className="absolute right-3 top-2.5 h-5 w-5 text-muted-foreground opacity-50" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="cardCvv">CVV</Label>
+                      <div className="relative">
+                        <Input 
+                          id="cardCvv" 
+                          type="password"
+                          value={cardCvv} 
+                          onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, "").substring(0, 4))} 
+                          placeholder="123" 
+                        />
+                        <Lock className="absolute right-3 top-2.5 h-5 w-5 text-muted-foreground opacity-50" />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="installments">Parcelamento</Label>
+                    <select 
+                      id="installments"
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={installments}
+                      onChange={(e) => setInstallments(e.target.value)}
+                    >
+                      <option value="1">1x de R$ {totalPrice.toFixed(2).replace(".", ",")} sem juros</option>
+                      {totalPrice > 100 && <option value="2">2x de R$ {(totalPrice / 2).toFixed(2).replace(".", ",")} sem juros</option>}
+                      {totalPrice > 150 && <option value="3">3x de R$ {(totalPrice / 3).toFixed(2).replace(".", ",")} sem juros</option>}
+                    </select>
                   </div>
                 </CardContent>
               </Card>
