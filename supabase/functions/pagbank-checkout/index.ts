@@ -54,8 +54,6 @@ serve(async (req) => {
 
     const checkoutPayload: any = {
       reference_id: referenceId,
-      expiration_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().replace(/\.\d{3}Z$/, '-03:00'),
-      customer_modifiable: true,
       items: orderItems,
       additional_amount: 0,
       discount_amount: 0,
@@ -74,10 +72,9 @@ serve(async (req) => {
       }],
       redirect_urls: {
         return_url: "https://www.stillinformatica.com.br/?payment=success",
-        back_url: "https://www.stillinformatica.com.br/?payment=cancelled",
+        back_url: "https://www.stillinformatica.com.br/checkout?payment=cancelled",
       },
       notification_urls: [webhookUrl],
-      payment_notification_urls: [webhookUrl],
     };
 
     if (customer) {
@@ -96,11 +93,10 @@ serve(async (req) => {
 
     if (shipping) {
       checkoutPayload.shipping = {
-        type: "FREE", // PagBank requires a type. Using FREE as it's the most common for simple checkouts, or you can pass it from frontend
         address: {
           street: shipping.street,
           number: shipping.number && shipping.number !== "S/N" ? shipping.number : "1",
-          complement: shipping.complement || "N/A", // PagBank may require it not to be empty
+          complement: shipping.complement || "N/A",
           locality: shipping.locality,
           city: shipping.city,
           region_code: shipping.region_code,
