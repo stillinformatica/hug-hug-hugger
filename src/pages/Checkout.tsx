@@ -397,9 +397,10 @@ const Checkout = () => {
 
       if (error) throw error;
 
-      const paymentUrl = data?.payment_url;
+      const paymentUrl = data?.payment_url || data?.links?.find((l: any) => l.rel === "PAY")?.href;
       if (!paymentUrl) {
-        throw new Error("Não foi possível gerar o checkout do PagBank.");
+        console.error("PagBank response without payment URL:", data);
+        throw new Error("Não foi possível gerar o link de pagamento do PagBank. Verifique as credenciais.");
       }
 
       window.location.href = paymentUrl;
