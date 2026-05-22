@@ -134,7 +134,14 @@ serve(async (req) => {
       const data = JSON.parse(responseText);
       
       const paymentLink = data.links?.find((l: { rel: string }) => l.rel === "PAY");
-      const paymentUrl = paymentLink?.href || `https://pagamento.sandbox.pagbank.com.br/pagamento?code=${data.id}`;
+      const paymentUrl = paymentLink?.href;
+      if (!paymentUrl) {
+        console.error("PagBank API returned no payment link:", data);
+        return new Response(
+          JSON.stringify({ error: "Link de pagamento não retornado pelo PagBank", details: data }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
       // Save order to database
       if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
