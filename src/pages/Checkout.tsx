@@ -19,11 +19,19 @@ import {
   CheckCircle2,
   Clock,
   XCircle,
+  Calendar,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
+
+declare global {
+  interface Window {
+    PagSeguro?: any;
+  }
+}
 
 interface ShippingOption {
   id: string;
@@ -62,6 +70,12 @@ const Checkout = () => {
   const [customerCpf, setCustomerCpf] = useState("");
   const [addressNumber, setAddressNumber] = useState("");
   const [addressComplement, setAddressComplement] = useState("");
+
+  const [cardNumber, setCardNumber] = useState("");
+  const [cardName, setCardName] = useState("");
+  const [cardExpiry, setCardExpiry] = useState("");
+  const [cardCvv, setCardCvv] = useState("");
+  const [installments, setInstallments] = useState("1");
 
   const [pagBankLoading, setPagBankLoading] = useState(false);
   const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null);
