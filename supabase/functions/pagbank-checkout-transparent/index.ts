@@ -101,7 +101,6 @@ serve(async (req) => {
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${PAGBANK_TOKEN}`,
-        "x-pagseguro-account-id": MARKETPLACE_ID,
       },
       body: JSON.stringify(payload),
     });
