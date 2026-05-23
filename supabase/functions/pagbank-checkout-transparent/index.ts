@@ -86,18 +86,18 @@ serve(async (req) => {
         capture: true,
         card: {
           encrypted: card_token,
-          security_code: "000",
-          store: false
-        },
-        holder: {
-          name: customer.name,
-          tax_id: customer.cpf.replace(/\D/g, "")
+          security_code: security_code || "000",
+          store: false,
+          holder: {
+            name: customer.name,
+            tax_id: customer.cpf.replace(/\D/g, "")
+          }
         }
       };
       
       // Validação de segurança extra para holder tax_id se necessário
-      if (payload.payment_method.holder.tax_id.length !== 11 && payload.payment_method.holder.tax_id.length !== 14) {
-        console.error("CPF/CNPJ inválido para o portador do cartão:", payload.payment_method.holder.tax_id);
+      if (payload.payment_method.card.holder.tax_id.length !== 11 && payload.payment_method.card.holder.tax_id.length !== 14) {
+        console.error("CPF/CNPJ inválido para o portador do cartão:", payload.payment_method.card.holder.tax_id);
       }
     }
 
