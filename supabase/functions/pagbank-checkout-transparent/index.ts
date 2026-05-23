@@ -89,7 +89,7 @@ serve(async (req) => {
           security_code: security_code || "000",
           store: false,
           holder: {
-            name: customer.name,
+            name: card_name || customer.name,
             tax_id: customer.cpf.replace(/\D/g, "")
           }
         }
