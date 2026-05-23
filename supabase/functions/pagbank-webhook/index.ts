@@ -14,11 +14,11 @@ serve(async (req) => {
   }
 
   try {
-    const PAGBANK_TOKEN = Deno.env.get("PAGBANK_TOKEN");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const PAGBANK_TOKEN = Deno.env.get("PAGBANK_TOKEN");
 
-    if (!PAGBANK_TOKEN || !SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       console.error("Missing environment variables");
       return new Response(
         JSON.stringify({ error: "Configuração incompleta" }),
@@ -27,84 +27,59 @@ serve(async (req) => {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const bodyText = await req.text();
+    console.log("PagBank notification received. Headers:", Object.fromEntries(req.headers.entries()));
+    console.log("Body:", bodyText);
 
-    const body = await req.text();
-    console.log("PagBank notification received:", body);
+    let notificationData: any = null;
+    let referenceId: string | null = null;
+    let status: string | null = null;
+    let pagbankId: string | null = null;
 
-    // PagBank sends notifications as form-encoded or JSON
-    let notificationCode: string | null = null;
-    let notificationType: string | null = null;
+    // Try to parse as JSON first (v4 Orders API)
+    try {
+      notificationData = JSON.parse(bodyText);
+      console.log("Parsed as JSON (v4)");
 
-    // Try form-encoded first (PagBank v2 style)
-    if (body.includes("notificationCode")) {
-      const params = new URLSearchParams(body);
-      notificationCode = params.get("notificationCode");
-      notificationType = params.get("notificationType");
-    } else {
-      // Try JSON (PagBank v4 style)
-      try {
-        const jsonBody = JSON.parse(body);
-        notificationCode = jsonBody.id || jsonBody.notificationCode;
-        notificationType = jsonBody.notificationType || "transaction";
+      // PagBank v4 Orders API webhook structure
+      if (notificationData.reference_id) {
+        referenceId = notificationData.reference_id;
+        pagbankId = notificationData.id;
         
-        // v4 webhooks may include charge data directly
-        if (jsonBody.charges) {
-          const charge = jsonBody.charges[0];
-          const referenceId = jsonBody.reference_id;
-          
-          const { error } = await supabase
-            .from("orders")
-            .update({
-              status: charge?.status || "UNKNOWN",
-              pagbank_id: jsonBody.id,
-              notification_data: jsonBody,
-            })
-            .eq("reference_id", referenceId);
-
-          if (error) console.error("Error updating order (v4):", error);
-          else console.log("Order updated via v4 webhook:", referenceId, charge?.status);
-
-          return new Response(
-            JSON.stringify({ success: true }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+        // Find status from charges
+        if (notificationData.charges && notificationData.charges.length > 0) {
+          status = notificationData.charges[0].status;
+        } else if (notificationData.status) {
+          status = notificationData.status;
         }
-      } catch {
-        console.log("Body is not JSON, trying other formats");
       }
-    }
+    } catch (e) {
+      // Not JSON, check if it's form-encoded (v2/v3)
+      console.log("Not JSON, checking form-encoded...");
+      const params = new URLSearchParams(bodyText);
+      const notificationCode = params.get("notificationCode");
+      const notificationType = params.get("notificationType");
 
-    if (!notificationCode) {
-      console.error("No notification code found in body:", body);
-      return new Response(
-        JSON.stringify({ error: "notificationCode não encontrado" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+      if (notificationCode && notificationType === "transaction") {
+        console.log("v3 Transaction notification detected. Fetching details...");
+        
+        const response = await fetch(
+          `${PAGBANK_PROD_WS}/v3/transactions/notifications/${notificationCode}?email=${Deno.env.get("PAGBANK_EMAIL")}&token=${PAGBANK_TOKEN}`,
+          { method: "GET" }
+        );
 
-    console.log("Notification code:", notificationCode, "Type:", notificationType);
+        if (response.ok) {
+          const xmlText = await response.text();
+          console.log("v3 details received (XML):", xmlText);
+          
+          // Basic XML extraction (could use a library, but regex is faster for simple cases)
+          const refMatch = xmlText.match(/<reference>(.*?)<\/reference>/);
+          const statusMatch = xmlText.match(/<status>(.*?)<\/status>/);
+          const codeMatch = xmlText.match(/<code>(.*?)<\/code>/);
 
-    // Query PagBank sandbox for transaction details
-    if (notificationType === "transaction") {
-      const response = await fetch(
-        `${PAGBANK_PROD_WS}/v3/transactions/notifications/${notificationCode}`,
-        {
-          headers: {
-            "Content-Type": "application/json",
-            "Authorization": `Bearer ${PAGBANK_TOKEN}`,
-          },
-        }
-      );
-
-      const responseText = await response.text();
-      console.log("PagBank transaction details:", responseText);
-
-      if (response.ok) {
-        try {
-          const txData = JSON.parse(responseText);
-          const referenceId = txData.reference_id || txData.reference;
-
-          // Map PagBank status codes to readable status
+          referenceId = refMatch ? refMatch[1] : null;
+          pagbankId = codeMatch ? codeMatch[1] : null;
+          
           const statusMap: Record<string, string> = {
             "1": "WAITING_PAYMENT",
             "2": "IN_ANALYSIS",
@@ -116,39 +91,45 @@ serve(async (req) => {
             "8": "DEBITED",
             "9": "TEMPORARY_RETENTION",
           };
-
-          const status = statusMap[String(txData.status)] || txData.status || "UNKNOWN";
-
-          if (referenceId) {
-            const { error } = await supabase
-              .from("orders")
-              .update({
-                status,
-                pagbank_id: txData.code || txData.id,
-                notification_data: txData,
-              })
-              .eq("reference_id", referenceId);
-
-            if (error) console.error("Error updating order:", error);
-            else console.log("Order updated:", referenceId, "->", status);
-          }
-        } catch (parseErr) {
-          console.error("Error parsing transaction data:", parseErr);
+          
+          status = statusMatch ? (statusMap[statusMatch[1]] || statusMatch[1]) : null;
+        } else {
+          console.error("Failed to fetch v3 details:", await response.text());
         }
-      } else {
-        console.error("Error fetching transaction:", response.status, responseText);
       }
     }
 
-    return new Response(
-      JSON.stringify({ success: true }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    if (referenceId && status) {
+      console.log(`Updating order ${referenceId} to status ${status}`);
+      
+      const { error } = await supabase
+        .from("orders")
+        .update({
+          status: status,
+          pagbank_id: pagbankId,
+          notification_data: notificationData || bodyText,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("reference_id", referenceId);
+
+      if (error) {
+        console.error("Error updating order in database:", error);
+      } else {
+        console.log("Order updated successfully");
+      }
+    } else {
+      console.warn("Could not determine reference_id and status from notification");
+    }
+
+    return new Response(JSON.stringify({ success: true }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   } catch (error) {
-    console.error("Webhook error:", error);
-    return new Response(
-      JSON.stringify({ error: "Erro interno" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    console.error("Unexpected error in webhook handler:", error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });
