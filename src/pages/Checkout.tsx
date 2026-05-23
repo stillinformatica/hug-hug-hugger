@@ -225,9 +225,15 @@ const Checkout = () => {
       return;
     }
 
-    if (paymentMethod === "CREDIT_CARD" && (!cardNumber || !cardName || !cardExpiry || !cardCvv)) {
-      toast.error("Dados do cartão incompletos", { description: "Preencha todos os campos do cartão de crédito" });
-      return;
+    if (paymentMethod === "CREDIT_CARD") {
+      if (!cardNumber || !cardName.trim().includes(" ") || !cardExpiry || !cardCvv) {
+        toast.error("Dados do cartão incompletos", { 
+          description: !cardName.trim().includes(" ") 
+            ? "Informe o nome completo como está no cartão (nome e sobrenome)" 
+            : "Preencha todos os campos do cartão de crédito" 
+        });
+        return;
+      }
     }
 
     setPagBankLoading(true);
