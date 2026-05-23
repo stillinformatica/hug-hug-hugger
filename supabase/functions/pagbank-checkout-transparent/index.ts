@@ -7,6 +7,7 @@ const corsHeaders = {
 };
 
 const PAGBANK_BASE_URL = "https://api.pagseguro.com";
+const MARKETPLACE_ID = "ACCO_FB6B17D3-56D1-45AE-9C96-7A78E2DEE219";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -100,6 +101,7 @@ serve(async (req) => {
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${PAGBANK_TOKEN}`,
+        "x-pagseguro-account-id": MARKETPLACE_ID,
       },
       body: JSON.stringify(payload),
     });
