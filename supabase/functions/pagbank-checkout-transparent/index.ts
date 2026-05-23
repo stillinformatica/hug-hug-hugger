@@ -27,7 +27,7 @@ serve(async (req) => {
     }
 
     const body = await req.json();
-    const { items, customer, shipping, card_token, installments, payment_method = "CREDIT_CARD" } = body;
+    const { items, customer, shipping, card_token, security_code, installments, payment_method = "CREDIT_CARD" } = body;
 
     const referenceId = `ORDER_${Date.now()}`;
 
