@@ -443,7 +443,15 @@ const Checkout = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="phone">Telefone</Label>
-                      <Input id="phone" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="(11) 99999-9999" />
+                      <Input 
+                        id="phone" 
+                        value={customerPhone} 
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "").replace(/^(\d{2})(\d)/g, "($1) $2").replace(/(\d{5})(\d)/, "$1-$2").substring(0, 15);
+                          setCustomerPhone(val);
+                        }} 
+                        placeholder="(11) 99999-9999" 
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="cpf">CPF *</Label>
