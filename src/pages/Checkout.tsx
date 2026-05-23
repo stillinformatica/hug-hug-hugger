@@ -151,8 +151,8 @@ const Checkout = () => {
   useEffect(() => {
     checkoutDataRef.current = {
       customer: {
-        name: customerName,
-        email: customerEmail,
+        name: customerName.trim(),
+        email: customerEmail.trim(),
         phone: customerPhone.replace(/\D/g, ""),
         cpf: customerCpf.replace(/\D/g, ""),
       },
