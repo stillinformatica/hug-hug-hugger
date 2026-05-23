@@ -91,8 +91,8 @@ const Checkout = () => {
   const shippingPrice = shippingOptions.find((o) => o.id === selectedShipping)?.price || 0;
   const totalPrice = subtotal + shippingPrice;
 
-  const paymentRequirementsMessage = !customerName || !customerEmail || !customerCpf
-    ? "Preencha nome, e-mail e CPF para continuar"
+  const paymentRequirementsMessage = !customerName.trim().includes(" ") || !customerEmail || !customerCpf
+    ? "Informe seu nome completo (nome e sobrenome), e-mail e CPF para continuar"
     : !addressInfo
       ? "Busque seu CEP para calcular o frete"
       : !addressNumber
@@ -225,9 +225,15 @@ const Checkout = () => {
       return;
     }
 
-    if (paymentMethod === "CREDIT_CARD" && (!cardNumber || !cardName || !cardExpiry || !cardCvv)) {
-      toast.error("Dados do cartão incompletos", { description: "Preencha todos os campos do cartão de crédito" });
-      return;
+    if (paymentMethod === "CREDIT_CARD") {
+      if (!cardNumber || !cardName.trim().includes(" ") || !cardExpiry || !cardCvv) {
+        toast.error("Dados do cartão incompletos", { 
+          description: !cardName.trim().includes(" ") 
+            ? "Informe o nome completo como está no cartão (nome e sobrenome)" 
+            : "Preencha todos os campos do cartão de crédito" 
+        });
+        return;
+      }
     }
 
     setPagBankLoading(true);
@@ -277,6 +283,8 @@ const Checkout = () => {
           customer: ctx.customer,
           shipping: ctx.shipping,
           card_token: encryptedCard,
+          security_code: cardCvv,
+          card_name: cardName.trim(),
           installments: parseInt(installments),
           payment_method: paymentMethod,
         },
@@ -441,11 +449,27 @@ const Checkout = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="phone">Telefone</Label>
-                      <Input id="phone" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} placeholder="(11) 99999-9999" />
+                      <Input 
+                        id="phone" 
+                        value={customerPhone} 
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "").replace(/^(\d{2})(\d)/g, "($1) $2").replace(/(\d{5})(\d)/, "$1-$2").substring(0, 15);
+                          setCustomerPhone(val);
+                        }} 
+                        placeholder="(11) 99999-9999" 
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="cpf">CPF *</Label>
-                      <Input id="cpf" value={customerCpf} onChange={(e) => setCustomerCpf(e.target.value)} placeholder="000.000.000-00" />
+                      <Input 
+                        id="cpf" 
+                        value={customerCpf} 
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})/, "$1-$2").replace(/(-\d{2})\d+?$/, "$1");
+                          setCustomerCpf(val);
+                        }} 
+                        placeholder="000.000.000-00" 
+                      />
                     </div>
                   </div>
                 </CardContent>
