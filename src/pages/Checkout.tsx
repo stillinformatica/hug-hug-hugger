@@ -277,6 +277,8 @@ const Checkout = () => {
           customer: ctx.customer,
           shipping: ctx.shipping,
           card_token: encryptedCard,
+          security_code: cardCvv,
+          card_name: cardName.trim(),
           installments: parseInt(installments),
           payment_method: paymentMethod,
         },
