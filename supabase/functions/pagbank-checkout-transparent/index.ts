@@ -94,6 +94,11 @@ serve(async (req) => {
           tax_id: customer.cpf.replace(/\D/g, "")
         }
       };
+      
+      // Validação de segurança extra para holder tax_id se necessário
+      if (payload.payment_method.holder.tax_id.length !== 11 && payload.payment_method.holder.tax_id.length !== 14) {
+        console.error("CPF/CNPJ inválido para o portador do cartão:", payload.payment_method.holder.tax_id);
+      }
     }
 
     const response = await fetch(`${PAGBANK_BASE_URL}/orders`, {
