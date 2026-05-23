@@ -447,7 +447,15 @@ const Checkout = () => {
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="cpf">CPF *</Label>
-                      <Input id="cpf" value={customerCpf} onChange={(e) => setCustomerCpf(e.target.value)} placeholder="000.000.000-00" />
+                      <Input 
+                        id="cpf" 
+                        value={customerCpf} 
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/\D/g, "").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d)/, "$1.$2").replace(/(\d{3})(\d{1,2})/, "$1-$2").replace(/(-\d{2})\d+?$/, "$1");
+                          setCustomerCpf(val);
+                        }} 
+                        placeholder="000.000.000-00" 
+                      />
                     </div>
                   </div>
                 </CardContent>
