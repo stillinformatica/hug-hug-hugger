@@ -86,7 +86,7 @@ const Checkout = () => {
 
   const paymentRequirementsMessage = !customerName.trim()
     ? "Informe seu nome para continuar"
-    : customerName.trim().split(" ").length < 2
+    : customerName.trim().split(/\s+/).length < 2
       ? "Informe seu nome completo (nome e sobrenome)"
       : !customerEmail
         ? "Informe seu e-mail"
