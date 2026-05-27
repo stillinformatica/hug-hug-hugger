@@ -93,6 +93,7 @@ serve(async (req) => {
 
     if (shipping) {
       checkoutPayload.shipping = {
+        type: "FIXED", // Added mandatory type field
         address: {
           street: shipping.street,
           number: shipping.number && shipping.number !== "S/N" ? shipping.number : "1",
