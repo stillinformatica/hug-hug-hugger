@@ -84,15 +84,21 @@ const Checkout = () => {
   const shippingPrice = shippingOptions.find((o) => o.id === selectedShipping)?.price || 0;
   const totalPrice = subtotal + shippingPrice;
 
-  const paymentRequirementsMessage = !customerName.trim().includes(" ") || !customerEmail || !customerCpf
-    ? "Informe seu nome completo (nome e sobrenome), e-mail e CPF para continuar"
-    : !addressInfo
-      ? "Busque seu CEP para calcular o frete"
-      : !addressNumber
-        ? "Informe o número do endereço"
-        : !selectedShipping
-          ? "Escolha uma opção de envio"
-          : null;
+  const paymentRequirementsMessage = !customerName.trim()
+    ? "Informe seu nome para continuar"
+    : customerName.trim().split(" ").length < 2
+      ? "Informe seu nome completo (nome e sobrenome)"
+      : !customerEmail
+        ? "Informe seu e-mail"
+        : !customerCpf
+          ? "Informe seu CPF"
+          : !addressInfo || !addressInfo.street
+            ? "Busque seu CEP para calcular o frete ou preencha o endereço"
+            : !addressNumber
+              ? "Informe o número do endereço"
+              : !selectedShipping
+                ? "Escolha uma opção de envio"
+                : null;
 
   const handleCepSearch = async () => {
     if (cep.replace(/\D/g, "").length !== 8) {
@@ -124,8 +130,8 @@ const Checkout = () => {
       setShippingOptions(data.shipping_options || []);
       setSelectedShipping(data.shipping_options?.[0]?.id || null);
 
-      if (data.shipping_options.length === 1 && data.shipping_options[0].id === "standard_shipping") {
-        setShippingError("A Total Express retornou 'Acesso Negado!'. O suporte da transportadora precisa liberar o acesso.");
+      if (data.shipping_options.length === 0) {
+        setShippingError("Não foi possível encontrar opções de envio para este CEP.");
       }
     } catch (err) {
       console.error(err);
@@ -590,10 +596,16 @@ const Checkout = () => {
 
                 <div className="space-y-3">
                   <Button
-                    onClick={handlePagBankCheckout}
+                    onClick={() => {
+                      if (paymentRequirementsMessage) {
+                        toast.error("Dados incompletos", { description: paymentRequirementsMessage });
+                        return;
+                      }
+                      handlePagBankCheckout();
+                    }}
                     size="lg"
                     className="w-full rounded-xl bg-[#009EE3] hover:bg-[#008AC0] text-white font-bold h-14"
-                    disabled={!!paymentRequirementsMessage || pagBankLoading}
+                    disabled={pagBankLoading}
                   >
                     {pagBankLoading ? (
                       <Loader2 className="h-5 w-5 animate-spin mr-2" />
@@ -607,9 +619,17 @@ const Checkout = () => {
                     Pagar com PagBank
                   </Button>
                   
-                  <p className="text-xs text-center min-h-4 text-muted-foreground">
-                    {paymentRequirementsMessage ?? "Pagamento seguro e garantido via PagBank."}
-                  </p>
+                  {paymentRequirementsMessage && (
+                    <p className="text-xs text-center min-h-4 text-destructive font-medium">
+                      {paymentRequirementsMessage}
+                    </p>
+                  )}
+                  
+                  {!paymentRequirementsMessage && (
+                    <p className="text-xs text-center min-h-4 text-muted-foreground">
+                      Pagamento seguro e garantido via PagBank.
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
