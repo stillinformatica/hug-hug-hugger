@@ -90,15 +90,17 @@ const Checkout = () => {
       ? "Informe seu nome completo (nome e sobrenome)"
       : !customerEmail
         ? "Informe seu e-mail"
-        : !customerCpf
-          ? "Informe seu CPF"
-          : !addressInfo || !addressInfo.street
-            ? "Busque seu CEP para calcular o frete ou preencha o endereço"
-            : !addressNumber
-              ? "Informe o número do endereço"
-              : !selectedShipping
-                ? "Escolha uma opção de envio"
-                : null;
+        : !customerPhone || customerPhone.replace(/\D/g, "").length < 10
+          ? "Informe um telefone válido"
+          : !customerCpf || customerCpf.replace(/\D/g, "").length !== 11
+            ? "Informe um CPF válido"
+            : !addressInfo || !addressInfo.street
+              ? "Busque seu CEP para calcular o frete ou preencha o endereço"
+              : !addressNumber
+                ? "Informe o número do endereço"
+                : !selectedShipping
+                  ? "Escolha uma opção de envio"
+                  : null;
 
   const handleCepSearch = async () => {
     if (cep.replace(/\D/g, "").length !== 8) {
