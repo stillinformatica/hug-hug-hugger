@@ -77,9 +77,8 @@ const Checkout = () => {
   const [cardNumber, setCardNumber] = useState("");
   const [cardName, setCardName] = useState("");
   const [cardExpiry, setCardExpiry] = useState("");
-  const [cardCvv, setCardCvv] = useState("");
   const [installments, setInstallments] = useState("1");
-  const [publicKey, setPublicKey] = useState<string | null>(null);
+  const [pixData, setPixData] = useState<{ text: string; qrCode: string } | null>(null);
   const [pixData, setPixData] = useState<{ text: string; qrCode: string } | null>(null);
 
   const [pagBankLoading, setPagBankLoading] = useState(false);
@@ -181,20 +180,6 @@ const Checkout = () => {
     };
   }, [customerName, customerEmail, customerPhone, customerCpf, addressInfo, addressNumber, addressComplement, cep, items, totalPrice]);
 
-  useEffect(() => {
-    const fetchPublicKey = async () => {
-      try {
-        const { data, error } = await supabase.functions.invoke("pagbank-public-key", {
-          body: { type: "card" }
-        });
-        if (error) throw error;
-        setPublicKey(data.public_key);
-      } catch (err) {
-        console.error("Erro ao buscar chave pública:", err);
-      }
-    };
-    fetchPublicKey();
-  }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
