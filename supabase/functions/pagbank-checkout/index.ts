@@ -129,32 +129,43 @@ serve(async (req) => {
 
     if (response.ok) {
       const data = JSON.parse(responseText);
+      console.log("PagBank API Data:", JSON.stringify(data));
       
       const paymentLink = data.links?.find((l: { rel: string }) => l.rel === "PAY");
       const paymentUrl = paymentLink?.href;
+      
       if (!paymentUrl) {
-        console.error("PagBank API returned no payment link:", data);
+        console.error("PagBank API returned no payment link. Available links:", data.links);
+        
+        // Se não houver link de pagamento, pode ser que a conta não esteja autorizada para checkout redirecionado
         return new Response(
-          JSON.stringify({ error: "Link de pagamento não retornado pelo PagBank", details: data }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          JSON.stringify({ 
+            error: "Sua conta PagSeguro não retornou um link de pagamento. Verifique se o Checkout Redirecionado está ativo em sua conta ou se há pendências no cadastro.",
+            details: data 
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
       // Save order to database
       if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
         const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-        const { error: dbError } = await supabase.from("orders").insert({
-          reference_id: referenceId,
-          pagbank_id: data.id,
-          status: "CREATED",
-          customer_name: customer?.name || null,
-          customer_email: customer?.email || null,
-          total_amount: totalAmount / 100,
-          items: items,
-          shipping_address: shipping || null,
-        });
-        if (dbError) console.error("Error saving order:", dbError);
-        else console.log("Order saved:", referenceId);
+        try {
+          const { error: dbError } = await supabase.from("orders").insert({
+            reference_id: referenceId,
+            pagbank_id: data.id,
+            status: "CREATED",
+            customer_name: customer?.name || null,
+            customer_email: customer?.email || null,
+            total_amount: totalAmount / 100,
+            items: items,
+            shipping_address: shipping || null,
+          });
+          if (dbError) console.error("Error saving order to DB:", dbError);
+          else console.log("Order successfully saved to DB:", referenceId);
+        } catch (dbEx) {
+          console.error("Exception saving order to DB:", dbEx);
+        }
       }
 
       return new Response(
