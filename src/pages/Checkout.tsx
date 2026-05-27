@@ -73,7 +73,7 @@ const Checkout = () => {
   const [addressNumber, setAddressNumber] = useState("");
   const [addressComplement, setAddressComplement] = useState("");
 
-  const [paymentMethod, setPaymentMethod] = useState<"CREDIT_CARD" | "PIX">("CREDIT_CARD");
+  const [paymentMethod, setPaymentMethod] = useState<"REDIRECT">("REDIRECT");
   const [cardNumber, setCardNumber] = useState("");
   const [cardName, setCardName] = useState("");
   const [cardExpiry, setCardExpiry] = useState("");
@@ -225,54 +225,12 @@ const Checkout = () => {
       return;
     }
 
-    if (paymentMethod === "CREDIT_CARD") {
-      if (!cardNumber || !cardName.trim().includes(" ") || !cardExpiry || !cardCvv) {
-        toast.error("Dados do cartão incompletos", { 
-          description: !cardName.trim().includes(" ") 
-            ? "Informe o nome completo como está no cartão (nome e sobrenome)" 
-            : "Preencha todos os campos do cartão de crédito" 
-        });
-        return;
-      }
-    }
-
     setPagBankLoading(true);
 
     try {
-      if (!window.PagSeguro) {
-        throw new Error("O sistema de pagamento não carregou. Recarregue a página.");
-      }
-
-      let encryptedCard = null;
-      if (paymentMethod === "CREDIT_CARD") {
-        if (!publicKey) {
-          throw new Error("Chave de segurança não carregada. Tente novamente em instantes.");
-        }
-
-        const expiryParts = cardExpiry.split("/");
-        const expMonth = expiryParts[0]?.trim();
-        const expYear = expiryParts[1]?.trim() ? `20${expiryParts[1].trim()}` : "";
-
-        const card = window.PagSeguro.encryptCard({
-          publicKey: publicKey,
-          holder: cardName,
-          number: cardNumber.replace(/\s/g, ""),
-          expMonth: expMonth,
-          expYear: expYear,
-          securityCode: cardCvv,
-        });
-
-        if (card.errors) {
-          console.error("Encryption errors:", card.errors);
-          throw new Error("Dados do cartão inválidos. Verifique as informações.");
-        }
-
-        encryptedCard = card.encryptedCard;
-      }
-
       const ctx = checkoutDataRef.current;
 
-      const { data, error } = await supabase.functions.invoke("pagbank-checkout-transparent", {
+      const { data, error } = await supabase.functions.invoke("pagbank-checkout", {
         body: {
           items: items.map((item) => ({
             name: item.name,
@@ -282,37 +240,20 @@ const Checkout = () => {
           })),
           customer: ctx.customer,
           shipping: ctx.shipping,
-          card_token: encryptedCard,
-          security_code: cardCvv,
-          card_name: cardName.trim(),
-          installments: parseInt(installments),
-          payment_method: paymentMethod,
         },
       });
 
       if (error) throw error;
 
-      if (paymentMethod === "PIX" && data.qr_code) {
-        const qrCodeImage = data.qr_code.links.find((l: any) => l.rel === "QRCODE")?.href;
-        setPixData({
-          text: data.qr_code.text,
-          qrCode: qrCodeImage || ""
-        });
-        return;
-      }
-
-      if (data.status === "PAID" || data.status === "AUTHORIZED" || data.status === "WAITING_PAYMENT" || data.status === "IN_ANALYSIS") {
-        setPaymentResult({ 
-          status: (data.status === "PAID" || data.status === "AUTHORIZED") ? "approved" : "pending", 
-          reference_id: data.reference_id 
-        });
-        clearCart();
+      if (data.payment_url) {
+        // Redireciona o usuário para o PagBank
+        window.location.href = data.payment_url;
       } else {
-        throw new Error(`O pagamento foi recusado. Status: ${data.status}`);
+        throw new Error("Link de pagamento não gerado pelo PagBank");
       }
     } catch (err) {
       console.error(err);
-      toast.error("Erro no pagamento", {
+      toast.error("Erro no checkout", {
         description: err instanceof Error ? err.message : "Tente novamente",
       });
     } finally {
@@ -481,115 +422,39 @@ const Checkout = () => {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
                     <CreditCard className="h-5 w-5 text-primary" />
-                    Forma de Pagamento
+                    Pagamento
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                  <div className="grid grid-cols-2 gap-4">
-                    <button
-                      onClick={() => setPaymentMethod("CREDIT_CARD")}
-                      className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all ${
-                        paymentMethod === "CREDIT_CARD" ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border"
-                      }`}
-                    >
-                      <CreditCard className={`h-6 w-6 mb-2 ${paymentMethod === "CREDIT_CARD" ? "text-primary" : "text-muted-foreground"}`} />
-                      <span className="text-sm font-medium">Cartão</span>
-                    </button>
-                    <button
-                      onClick={() => setPaymentMethod("PIX")}
-                      className={`flex flex-col items-center justify-center p-4 rounded-xl border transition-all ${
-                        paymentMethod === "PIX" ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border"
-                      }`}
-                    >
-                      <QrCode className={`h-6 w-6 mb-2 ${paymentMethod === "PIX" ? "text-primary" : "text-muted-foreground"}`} />
-                      <span className="text-sm font-medium">PIX</span>
-                    </button>
+                  <div className="flex flex-col items-center justify-center p-8 rounded-xl border border-primary bg-primary/5 ring-1 ring-primary text-center">
+                    <img 
+                      src="https://assets.pagseguro.com.br/ps-bootstrap/v6.63.1/img/pagseguro/logo-pagseguro.png" 
+                      alt="PagBank" 
+                      className="h-10 mb-4"
+                    />
+                    <p className="text-sm font-medium">Você será redirecionado para o ambiente seguro do PagBank para concluir seu pagamento.</p>
+                    <div className="flex gap-4 mt-6">
+                      <div className="flex flex-col items-center gap-1 opacity-70">
+                        <CreditCard className="h-6 w-6" />
+                        <span className="text-[10px]">Cartão</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-1 opacity-70">
+                        <QrCode className="h-6 w-6" />
+                        <span className="text-[10px]">Pix</span>
+                      </div>
+                      <div className="flex flex-col items-center gap-1 opacity-70">
+                        <Package className="h-6 w-6" />
+                        <span className="text-[10px]">Boleto</span>
+                      </div>
+                    </div>
                   </div>
-
-                  {paymentMethod === "CREDIT_CARD" ? (
-                    <div className="space-y-4 pt-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="cardNumber">Número do Cartão</Label>
-                        <div className="relative">
-                          <Input 
-                            id="cardNumber" 
-                            value={cardNumber} 
-                            onChange={(e) => {
-                              const val = e.target.value.replace(/\D/g, "").replace(/(.{4})/g, "$1 ").trim();
-                              setCardNumber(val.substring(0, 19));
-                            }} 
-                            placeholder="0000 0000 0000 0000" 
-                          />
-                          <CreditCard className="absolute right-3 top-2.5 h-5 w-5 text-muted-foreground opacity-50" />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="cardName">Nome no Cartão</Label>
-                        <Input 
-                          id="cardName" 
-                          value={cardName} 
-                          onChange={(e) => setCardName(e.target.value.toUpperCase())} 
-                          placeholder="COMO ESTÁ NO CARTÃO" 
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="cardExpiry">Validade</Label>
-                          <div className="relative">
-                            <Input 
-                              id="cardExpiry" 
-                              value={cardExpiry} 
-                              onChange={(e) => {
-                                let val = e.target.value.replace(/\D/g, "");
-                                if (val.length > 2) val = val.substring(0, 2) + "/" + val.substring(2, 4);
-                                setCardExpiry(val);
-                              }} 
-                              placeholder="MM/AA" 
-                              maxLength={5}
-                            />
-                            <Calendar className="absolute right-3 top-2.5 h-5 w-5 text-muted-foreground opacity-50" />
-                          </div>
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="cardCvv">CVV</Label>
-                          <div className="relative">
-                            <Input 
-                              id="cardCvv" 
-                              type="password"
-                              value={cardCvv} 
-                              onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, "").substring(0, 4))} 
-                              placeholder="123" 
-                            />
-                            <Lock className="absolute right-3 top-2.5 h-5 w-5 text-muted-foreground opacity-50" />
-                          </div>
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="installments">Parcelamento</Label>
-                        <select 
-                          id="installments"
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                          value={installments}
-                          onChange={(e) => setInstallments(e.target.value)}
-                        >
-                          <option value="1">1x de R$ {totalPrice.toFixed(2).replace(".", ",")} sem juros</option>
-                          {totalPrice > 100 && <option value="2">2x de R$ {(totalPrice / 2).toFixed(2).replace(".", ",")} sem juros</option>}
-                          {totalPrice > 150 && <option value="3">3x de R$ {(totalPrice / 3).toFixed(2).replace(".", ",")} sem juros</option>}
-                        </select>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="pt-4 space-y-4">
-                      <div className="flex items-start gap-3 p-4 bg-primary/5 rounded-xl border border-primary/20">
-                        <div className="h-6 w-6 rounded-full bg-primary text-white flex items-center justify-center flex-shrink-0 text-xs font-bold">1</div>
-                        <p className="text-sm">O PIX é processado instantaneamente.</p>
-                      </div>
-                      <div className="flex items-start gap-3 p-4 bg-primary/5 rounded-xl border border-primary/20">
-                        <div className="h-6 w-6 rounded-full bg-primary text-white flex items-center justify-center flex-shrink-0 text-xs font-bold">2</div>
-                        <p className="text-sm">O QR Code e o código "Copia e Cola" serão gerados após clicar em finalizar.</p>
-                      </div>
-                    </div>
-                  )}
+                  
+                  <div className="flex items-start gap-3 p-4 bg-secondary/20 rounded-xl border border-border">
+                    <Lock className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                    <p className="text-xs text-muted-foreground">
+                      Seus dados de pagamento são processados diretamente pelo PagBank. Não armazenamos informações de cartões em nosso servidor.
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             </motion.div>
@@ -753,8 +618,6 @@ const Checkout = () => {
                   >
                     {pagBankLoading ? (
                       <Loader2 className="h-5 w-5 animate-spin mr-2" />
-                    ) : paymentMethod === "PIX" ? (
-                      <QrCode className="h-6 mr-2" />
                     ) : (
                       <img 
                         src="https://assets.pagseguro.com.br/ps-bootstrap/v6.63.1/img/pagseguro/logo-pagseguro.png" 
@@ -762,7 +625,7 @@ const Checkout = () => {
                         className="h-6 mr-2 invert brightness-0"
                       />
                     )}
-                    {paymentMethod === "PIX" ? "Gerar QR Code PIX" : "Finalizar com PagSeguro"}
+                    Pagar com PagBank
                   </Button>
                   
                   <p className="text-xs text-center min-h-4 text-muted-foreground">

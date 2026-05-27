@@ -71,7 +71,7 @@ serve(async (req) => {
         }],
       }],
       redirect_urls: {
-        return_url: "https://www.stillinformatica.com.br/?payment=success",
+        return_url: "https://www.stillinformatica.com.br/checkout?payment=success",
         back_url: "https://www.stillinformatica.com.br/checkout?payment=cancelled",
       },
       notification_urls: [webhookUrl],
