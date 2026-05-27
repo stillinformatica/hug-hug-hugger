@@ -149,7 +149,7 @@ serve(async (req) => {
           status: "CREATED",
           customer_name: customer?.name || null,
           customer_email: customer?.email || null,
-          total_amount: totalAmount,
+          total_amount: totalAmount / 100,
           items: items,
           shipping_address: shipping || null,
         });
