@@ -77,7 +77,6 @@ const Checkout = () => {
   const [pagBankLoading, setPagBankLoading] = useState(false);
   const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null);
   const [pixData, setPixData] = useState<{ text: string; qrCode: string } | null>(null);
-  const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null);
 
   const checkoutDataRef = useRef<any>(null);
 
