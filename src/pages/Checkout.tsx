@@ -213,6 +213,8 @@ const Checkout = () => {
     }
 
     setPagBankLoading(true);
+    console.log("Iniciando checkout PagBank...");
+
     try {
       const { data, error } = await supabase.functions.invoke("pagbank-checkout", {
         body: {
@@ -243,18 +245,44 @@ const Checkout = () => {
         },
       });
 
-      if (error) throw error;
+      console.log("Resposta do PagBank Checkout:", { data, error });
 
-      if (data.payment_url) {
+      if (error) {
+        console.error("Erro retornado pela Edge Function:", error);
+        throw error;
+      }
+
+      if (data && data.payment_url) {
+        console.log("Redirecionando para:", data.payment_url);
         // Redireciona o usuário para o PagBank
         window.location.href = data.payment_url;
       } else {
-        throw new Error("Link de pagamento não gerado pelo PagBank");
+        console.error("Data sem payment_url:", data);
+        throw new Error(data?.error || "Link de pagamento não gerado pelo PagBank. Verifique se sua conta PagSeguro está autorizada para pagamentos via API.");
       }
-    } catch (err) {
-      console.error(err);
-      toast.error("Erro no checkout", {
-        description: err instanceof Error ? err.message : "Tente novamente",
+    } catch (err: any) {
+      console.error("Erro capturado no handlePagBankCheckout:", err);
+      
+      let errorMessage = "Tente novamente mais tarde";
+      let errorDescription = "";
+
+      if (err.message) {
+        errorDescription = err.message;
+      } else if (typeof err === 'object') {
+        errorDescription = JSON.stringify(err);
+      } else {
+        errorDescription = String(err);
+      }
+
+      // Se o erro for o ACCESS_DENIED que vimos antes
+      if (errorDescription.includes("ACCESS_DENIED")) {
+        errorMessage = "Acesso Negado no PagSeguro";
+        errorDescription = "Sua conta PagSeguro precisa de autorização para usar a API. Entre em contato com o suporte do PagSeguro.";
+      }
+
+      toast.error(errorMessage, {
+        description: errorDescription,
+        duration: 8000,
       });
     } finally {
       setPagBankLoading(false);
