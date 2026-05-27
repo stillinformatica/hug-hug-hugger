@@ -74,14 +74,9 @@ const Checkout = () => {
   const [addressComplement, setAddressComplement] = useState("");
 
   const [paymentMethod, setPaymentMethod] = useState<"REDIRECT">("REDIRECT");
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardName, setCardName] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [installments, setInstallments] = useState("1");
-  const [pixData, setPixData] = useState<{ text: string; qrCode: string } | null>(null);
-  const [pixData, setPixData] = useState<{ text: string; qrCode: string } | null>(null);
-
   const [pagBankLoading, setPagBankLoading] = useState(false);
+  const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null);
+  const [pixData, setPixData] = useState<{ text: string; qrCode: string } | null>(null);
   const [paymentResult, setPaymentResult] = useState<PaymentResult | null>(null);
 
   const checkoutDataRef = useRef<any>(null);
