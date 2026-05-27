@@ -15,6 +15,7 @@ serve(async (req) => {
 
   try {
     const PAGBANK_TOKEN = Deno.env.get("PAGBANK_TOKEN");
+    const PAGBANK_PUBLIC_KEY = Deno.env.get("PAGBANK_PUBLIC_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
@@ -35,7 +36,7 @@ serve(async (req) => {
       );
     }
 
-    const referenceId = `ORDER_${Date.now()}`;
+    const referenceId = `STILL${Date.now()}`; // Shorter and no underscores just in case
 
     const orderItems = items.map((item: { name: string; quantity: number; unit_amount: number }, index: number) => ({
       reference_id: `item_${index + 1}`,
@@ -57,19 +58,15 @@ serve(async (req) => {
       items: orderItems,
       additional_amount: 0,
       discount_amount: 0,
+      soft_descriptor: "STILL INF",
       payment_methods: [
         { type: "CREDIT_CARD" },
         { type: "DEBIT_CARD" },
         { type: "BOLETO" },
         { type: "PIX" },
       ],
-      payment_methods_configs: [{
-        type: "CREDIT_CARD",
-        config_options: [{
-          option: "INSTALLMENTS_LIMIT",
-          value: "12",
-        }],
-      }],
+      // Simplified configs to avoid redirect loops on some account types
+      payment_methods_configs: [],
       redirect_urls: {
         return_url: "https://www.stillinformatica.com.br/checkout?payment=success",
         back_url: "https://www.stillinformatica.com.br/checkout?payment=cancelled",
@@ -179,6 +176,7 @@ serve(async (req) => {
         JSON.stringify({
           id: data.id,
           payment_url: paymentUrl,
+          public_key: PAGBANK_PUBLIC_KEY,
           reference_id: referenceId,
           status: "CREATED",
         }),
