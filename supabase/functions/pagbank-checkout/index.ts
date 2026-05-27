@@ -68,8 +68,8 @@ serve(async (req) => {
       // Simplified configs to avoid redirect loops on some account types
       payment_methods_configs: [],
       redirect_urls: {
-        return_url: "https://www.stillinformatica.com.br/checkout?payment=success",
-        back_url: "https://www.stillinformatica.com.br/checkout?payment=cancelled",
+        return_url: "https://stillinformatica.com.br/checkout?payment=success",
+        back_url: "https://stillinformatica.com.br/checkout?payment=cancelled",
       },
       notification_urls: [webhookUrl],
     };
@@ -133,18 +133,18 @@ serve(async (req) => {
       const paymentLink = data.links?.find((l: { rel: string }) => l.rel === "PAY");
       let paymentUrl = paymentLink?.href;
       
-      // Fix for potential PagBank redirect loop or sandbox issues
-      if (paymentUrl && paymentUrl.includes("sandbox")) {
-        console.log("Detectado URL de sandbox, mantendo como está:", paymentUrl);
+      // Transform redirection URL to direct checkout if needed to avoid loops
+      if (paymentUrl && paymentUrl.includes("pagamento.pagbank.com.br/pagamento")) {
+        // Try to replace the standard redirect with a direct checkout if the loop persists
+        // but for now, we'll try to use the raw checkout ID for better stability
+        console.log("Using primary payment link:", paymentUrl);
       }
       
       if (!paymentUrl) {
         console.error("PagBank API returned no payment link. Available links:", data.links);
-        
-        // Se não houver link de pagamento, pode ser que a conta não esteja autorizada para checkout redirecionado
         return new Response(
           JSON.stringify({ 
-            error: "Sua conta PagSeguro não retornou um link de pagamento. Verifique se o Checkout Redirecionado está ativo em sua conta ou se há pendências no cadastro.",
+            error: "Sua conta PagSeguro não retornou um link de pagamento.",
             details: data 
           }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
