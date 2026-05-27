@@ -58,6 +58,7 @@ serve(async (req) => {
       items: orderItems,
       additional_amount: 0,
       discount_amount: 0,
+      soft_descriptor: "STILL INF",
       payment_methods: [
         { type: "CREDIT_CARD" },
         { type: "DEBIT_CARD" },
