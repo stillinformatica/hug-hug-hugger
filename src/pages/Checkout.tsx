@@ -240,6 +240,7 @@ const Checkout = () => {
                 region_code: addressInfo.state,
                 postal_code: cep.replace(/\D/g, ""),
                 shipping_service_id: selectedShipping,
+                amount: shippingPrice,
               }
             : null,
         },
