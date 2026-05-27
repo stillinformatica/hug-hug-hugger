@@ -213,10 +213,7 @@ const Checkout = () => {
     }
 
     setPagBankLoading(true);
-
     try {
-      const ctx = checkoutDataRef.current;
-
       const { data, error } = await supabase.functions.invoke("pagbank-checkout", {
         body: {
           items: items.map((item) => ({
@@ -225,8 +222,24 @@ const Checkout = () => {
             unit_amount: item.price,
             productId: item.productId,
           })),
-          customer: ctx.customer,
-          shipping: ctx.shipping,
+          customer: {
+            name: customerName.trim(),
+            email: customerEmail.trim(),
+            phone: customerPhone.replace(/\D/g, ""),
+            cpf: customerCpf.replace(/\D/g, ""),
+          },
+          shipping: addressInfo
+            ? {
+                street: addressInfo.street,
+                number: addressNumber,
+                complement: addressComplement,
+                locality: addressInfo.neighborhood,
+                city: addressInfo.city,
+                region_code: addressInfo.state,
+                postal_code: cep.replace(/\D/g, ""),
+                shipping_service_id: selectedShipping,
+              }
+            : null,
         },
       });
 
