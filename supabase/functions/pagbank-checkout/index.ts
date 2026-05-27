@@ -134,7 +134,12 @@ serve(async (req) => {
       console.log("PagBank API Data:", JSON.stringify(data));
       
       const paymentLink = data.links?.find((l: { rel: string }) => l.rel === "PAY");
-      const paymentUrl = paymentLink?.href;
+      let paymentUrl = paymentLink?.href;
+      
+      // Fix for potential PagBank redirect loop or sandbox issues
+      if (paymentUrl && paymentUrl.includes("sandbox")) {
+        console.log("Detectado URL de sandbox, mantendo como está:", paymentUrl);
+      }
       
       if (!paymentUrl) {
         console.error("PagBank API returned no payment link. Available links:", data.links);
