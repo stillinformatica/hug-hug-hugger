@@ -71,7 +71,7 @@ serve(async (req) => {
         }],
       }],
       redirect_urls: {
-        return_url: "https://www.stillinformatica.com.br/?payment=success",
+        return_url: "https://www.stillinformatica.com.br/checkout?payment=success",
         back_url: "https://www.stillinformatica.com.br/checkout?payment=cancelled",
       },
       notification_urls: [webhookUrl],
@@ -149,7 +149,7 @@ serve(async (req) => {
           status: "CREATED",
           customer_name: customer?.name || null,
           customer_email: customer?.email || null,
-          total_amount: totalAmount,
+          total_amount: totalAmount / 100,
           items: items,
           shipping_address: shipping || null,
         });
