@@ -11,7 +11,8 @@ serve(async (req) => {
   }
 
   try {
-    const PAGBANK_TOKEN = Deno.env.get("PAGBANK_TOKEN");
+    const body = await req.json().catch(() => ({}));
+    const PAGBANK_TOKEN = body.token || Deno.env.get("PAGBANK_TOKEN");
     const referenceId = "HOMOLOG_" + Date.now();
     
     const checkoutPayload = {
