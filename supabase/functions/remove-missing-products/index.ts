@@ -33,14 +33,32 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Delete products that have a source_id but are NOT in the list provided
-    const { data, error, count } = await supabase
+    // We need to fetch all existing source_ids to compare correctly
+    // The previous implementation using .not("source_id", "in", ...) can be flaky with large lists
+    const { data: existingProducts, error: fetchError } = await supabase
       .from("announced_products")
-      .delete({ count: "exact" })
-      .not("source_id", "is", null)
-      .not("source_id", "in", `(${source_ids.join(",")})`);
+      .select("id, source_id")
+      .not("source_id", "is", null);
 
-    if (error) throw error;
+    if (fetchError) throw fetchError;
+
+    // Filter products that are in our DB but NOT in the provided source_ids list
+    const toDelete = existingProducts
+      .filter(p => !source_ids.includes(Number(p.source_id)))
+      .map(p => p.id);
+
+    let count = 0;
+    if (toDelete.length > 0) {
+      console.log(`Attempting to delete ${toDelete.length} products:`, toDelete);
+      
+      const { error: deleteError, count: deletedCount } = await supabase
+        .from("announced_products")
+        .delete({ count: "exact" })
+        .in("id", toDelete);
+
+      if (deleteError) throw deleteError;
+      count = deletedCount || 0;
+    }
 
     console.log(`Removed ${count} products missing from source.`);
 
