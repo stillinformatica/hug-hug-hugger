@@ -33,16 +33,47 @@ Deno.serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Delete products that have a source_id but are NOT in the list provided
-    const { data, error, count } = await supabase
+    // We need to fetch all existing source_ids to compare correctly
+    const { data: existingProducts, error: fetchError } = await supabase
       .from("announced_products")
-      .delete({ count: "exact" })
-      .not("source_id", "is", null)
-      .not("source_id", "in", `(${source_ids.join(",")})`);
+      .select("id, name, source_id");
 
-    if (error) throw error;
+    if (fetchError) throw fetchError;
 
-    console.log(`Removed ${count} products missing from source.`);
+    console.log(`Found ${existingProducts?.length || 0} total products in database.`);
+
+    // Filter products that have a source_id in our DB but are NOT in the provided source_ids list
+    const toDelete = existingProducts
+      .filter(p => {
+        // Only consider products that have a source_id (came from the external system)
+        if (p.source_id === null || p.source_id === undefined) return false;
+        
+        // Convert to number to ensure proper comparison
+        const sId = Number(p.source_id);
+        const isStillInSource = source_ids.includes(sId);
+        
+        if (!isStillInSource) {
+          console.log(`Product "${p.name}" (ID: ${p.id}, SourceID: ${sId}) is missing from source list.`);
+        }
+        
+        return !isStillInSource;
+      })
+      .map(p => p.id);
+
+    let count = 0;
+    if (toDelete.length > 0) {
+      console.log(`Attempting to delete ${toDelete.length} products:`, toDelete);
+      
+      const { error: deleteError, count: deletedCount } = await supabase
+        .from("announced_products")
+        .delete({ count: "exact" })
+        .in("id", toDelete);
+
+      if (deleteError) throw deleteError;
+      count = deletedCount || 0;
+    }
+
+    console.log(`Successfully removed ${count} products.`);
 
     return new Response(
       JSON.stringify({ success: true, removed_count: count }),
