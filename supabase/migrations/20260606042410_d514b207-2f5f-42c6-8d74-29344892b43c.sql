@@ -1,0 +1,1 @@
+CREATE POLICY "Service role can delete announced products" ON public.announced_products FOR DELETE TO service_role USING (true);
