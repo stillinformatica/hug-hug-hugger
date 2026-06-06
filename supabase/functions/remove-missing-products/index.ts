@@ -53,7 +53,12 @@ Deno.serve(async (req) => {
         const isStillInSource = source_ids.some(id => String(id) === String(sId));
         
         if (!isStillInSource) {
-          console.log(`Product "${p.name}" (ID: ${p.id}, SourceID: ${sId}) is missing from source list.`);
+          console.log(`Product "${p.name}" (ID: ${p.id}, SourceID: ${sId}) IS MISSING from source and WILL BE DELETED.`);
+        } else {
+          // Temporarily log this to see if it's finding the product we expect
+          if (p.name.includes("Sanduicheira")) {
+            console.log(`Product "${p.name}" (SourceID: ${sId}) WAS FOUND in source list, so it WON'T be deleted.`);
+          }
         }
         
         return !isStillInSource;
