@@ -48,9 +48,9 @@ Deno.serve(async (req) => {
         // Only consider products that have a source_id (came from the external system)
         if (p.source_id === null || p.source_id === undefined) return false;
         
-        // Convert to number to ensure proper comparison
-        const sId = Number(p.source_id);
-        const isStillInSource = source_ids.includes(sId);
+        // Garantir que a comparação funcione independente de ser string ou número
+        const sId = p.source_id;
+        const isStillInSource = source_ids.some(id => String(id) === String(sId));
         
         if (!isStillInSource) {
           console.log(`Product "${p.name}" (ID: ${p.id}, SourceID: ${sId}) is missing from source list.`);
