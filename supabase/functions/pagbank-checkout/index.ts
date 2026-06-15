@@ -56,34 +56,34 @@ serve(async (req) => {
     const checkoutPayload: any = {
       reference_id: referenceId,
       items: orderItems,
-      additional_amount: 0,
-      discount_amount: 0,
-      soft_descriptor: "STILL INF",
+      soft_descriptor: "STILLINF",
       payment_methods: [
         { type: "CREDIT_CARD" },
         { type: "DEBIT_CARD" },
         { type: "BOLETO" },
         { type: "PIX" },
       ],
-      // Simplified configs to avoid redirect loops on some account types
-      payment_methods_configs: [],
+      // IMPORTANT: PagBank anexa seus próprios parâmetros à URL.
+      // URLs com query string causam loop de redirecionamento.
       redirect_urls: {
-        return_url: "https://stillinformatica.com.br/checkout?payment=success",
-        back_url: "https://stillinformatica.com.br/checkout?payment=cancelled",
+        return_url: "https://stillinformatica.com.br/pedido-concluido",
+        back_url: "https://stillinformatica.com.br/checkout",
       },
       notification_urls: [webhookUrl],
     };
 
     if (customer) {
+      const phoneDigits = (customer.phone || "").replace(/\D/g, "");
+      const taxId = (customer.cpf || "").replace(/\D/g, "");
       checkoutPayload.customer = {
         name: customer.name,
         email: customer.email,
-        tax_id: customer.cpf?.replace(/\D/g, ""),
-        phones: customer.phone ? [{
+        tax_id: taxId,
+        phones: phoneDigits.length >= 10 ? [{
           country: "55",
-          area: customer.phone.substring(0, 2),
-          number: customer.phone.substring(2),
-          type: "MOBILE"
+          area: phoneDigits.substring(0, 2),
+          number: phoneDigits.substring(2),
+          type: phoneDigits.length === 11 ? "MOBILE" : "HOME"
         }] : []
       };
     }
