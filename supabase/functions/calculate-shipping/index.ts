@@ -120,16 +120,67 @@ serve(async (req) => {
           const checkoutData = await checkoutRes.json();
           console.log("Melhor Envio Checkout Response:", checkoutData);
 
-          // Atualizar pedido com ID da etiqueta
+          if (!checkoutRes.ok) {
+            return new Response(JSON.stringify({ success: false, stage: "checkout", error: checkoutData }), {
+              status: checkoutRes.status,
+              headers: { ...corsHeaders, "Content-Type": "application/json" }
+            });
+          }
+
+          // 3. Gerar etiqueta
+          const generateRes = await fetch(`${MELHORENVIO_URL}/api/v2/me/shipment/generate`, {
+            method: "POST",
+            headers: {
+              "Accept": "application/json",
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${MELHORENVIO_TOKEN}`,
+              "User-Agent": "StillInformatica (contato@stillinformatica.com.br)"
+            },
+            body: JSON.stringify({ orders: [cartData.id] })
+          });
+          const generateData = await generateRes.json();
+          console.log("Melhor Envio Generate Response:", generateData);
+
+          // 4. Obter tracking
+          let trackingCode: string | null = null;
+          try {
+            const trackRes = await fetch(`${MELHORENVIO_URL}/api/v2/me/shipment/tracking`, {
+              method: "POST",
+              headers: {
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${MELHORENVIO_TOKEN}`,
+                "User-Agent": "StillInformatica (contato@stillinformatica.com.br)"
+              },
+              body: JSON.stringify({ orders: [cartData.id] })
+            });
+            const trackData = await trackRes.json();
+            console.log("Melhor Envio Tracking Response:", trackData);
+            const trackEntry = trackData?.[cartData.id] || Object.values(trackData || {})[0];
+            trackingCode = (trackEntry as any)?.tracking || (trackEntry as any)?.melhorenvio_tracking || null;
+          } catch (e) {
+            console.warn("Tracking não disponível ainda:", e);
+          }
+
+          // 5. Link para imprimir etiqueta
+          const printUrl = `${MELHORENVIO_URL}/api/v2/me/shipment/print`;
+
           await supabase
             .from("orders")
-            .update({ 
+            .update({
               shipping_label_id: cartData.id,
-              tracking_number: cartData.protocol || null
+              tracking_number: trackingCode || cartData.protocol || null
             })
             .eq("id", order.id);
 
-          return new Response(JSON.stringify({ success: true, data: checkoutData }), {
+          return new Response(JSON.stringify({
+            success: true,
+            cart_id: cartData.id,
+            tracking: trackingCode,
+            checkout: checkoutData,
+            generate: generateData,
+            print_url: printUrl
+          }), {
             headers: { ...corsHeaders, "Content-Type": "application/json" }
           });
         }

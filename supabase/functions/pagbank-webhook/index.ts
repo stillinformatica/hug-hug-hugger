@@ -102,7 +102,7 @@ serve(async (req) => {
     if (referenceId && status) {
       console.log(`Updating order ${referenceId} to status ${status}`);
       
-      const { error } = await supabase
+      const { data: updatedOrder, error } = await supabase
         .from("orders")
         .update({
           status: status,
@@ -110,12 +110,85 @@ serve(async (req) => {
           notification_data: notificationData || bodyText,
           updated_at: new Date().toISOString(),
         })
-        .eq("reference_id", referenceId);
+        .eq("reference_id", referenceId)
+        .select()
+        .maybeSingle();
 
       if (error) {
         console.error("Error updating order in database:", error);
       } else {
         console.log("Order updated successfully");
+      }
+
+      // Disparar pós-pagamento apenas quando PAID e ainda sem etiqueta
+      if (updatedOrder && status === "PAID" && !updatedOrder.shipping_label_id) {
+        console.log("PAID detected — disparando emails + etiqueta");
+
+        const SELLER_EMAIL = "stillinformatica@stillinformatica.com.br";
+        const FROM = "Still Informatica <onboarding@resend.dev>";
+        const itemsHtml = (Array.isArray(updatedOrder.items) ? updatedOrder.items : [])
+          .map((i: any) => `<li>${i.quantity}x ${i.name} — R$ ${Number(i.unit_amount || i.price || 0).toFixed(2)}</li>`)
+          .join("");
+        const addr = updatedOrder.shipping_address || {};
+        const addrHtml = `${addr.street || ""}, ${addr.number || ""} ${addr.complement || ""}<br>${addr.locality || ""} - ${addr.city || ""}/${addr.region_code || ""}<br>CEP: ${addr.postal_code || ""}`;
+        const total = Number(updatedOrder.total_amount || 0).toFixed(2);
+
+        // Email comprador
+        try {
+          await supabase.functions.invoke("send-email", {
+            body: {
+              from: FROM,
+              to: updatedOrder.customer_email,
+              subject: `Pagamento confirmado — Pedido ${updatedOrder.reference_id}`,
+              html: `<h1>Obrigado pela sua compra!</h1>
+                <p>Olá ${updatedOrder.customer_name || ""}, recebemos a confirmação do seu pagamento.</p>
+                <p><strong>Pedido:</strong> ${updatedOrder.reference_id}</p>
+                <p><strong>Total:</strong> R$ ${total}</p>
+                <h3>Itens</h3><ul>${itemsHtml}</ul>
+                <h3>Endereço de entrega</h3><p>${addrHtml}</p>
+                <p>Em breve enviaremos seu código de rastreio.</p>
+                <p>Equipe Still Informatica</p>`
+            }
+          });
+        } catch (e) { console.error("Erro email comprador:", e); }
+
+        // Email vendedor
+        try {
+          await supabase.functions.invoke("send-email", {
+            body: {
+              from: FROM,
+              to: SELLER_EMAIL,
+              subject: `Nova venda PAGA — ${updatedOrder.reference_id} — R$ ${total}`,
+              html: `<h1>Nova venda confirmada</h1>
+                <p><strong>Pedido:</strong> ${updatedOrder.reference_id}</p>
+                <p><strong>Cliente:</strong> ${updatedOrder.customer_name || ""} (${updatedOrder.customer_email})</p>
+                <p><strong>Total:</strong> R$ ${total}</p>
+                <h3>Itens</h3><ul>${itemsHtml}</ul>
+                <h3>Entrega</h3><p>${addrHtml}</p>`
+            }
+          });
+        } catch (e) { console.error("Erro email vendedor:", e); }
+
+        // Gerar etiqueta Melhor Envio (cart + checkout + generate)
+        try {
+          const { data: shipData, error: shipErr } = await supabase.functions.invoke("calculate-shipping", {
+            body: { action: "register_collection", order: updatedOrder }
+          });
+          console.log("Etiqueta result:", shipData, shipErr);
+
+          if (shipData?.success && shipData?.tracking) {
+            await supabase.functions.invoke("send-email", {
+              body: {
+                from: FROM,
+                to: updatedOrder.customer_email,
+                subject: `Seu pedido ${updatedOrder.reference_id} foi postado`,
+                html: `<h1>Pedido a caminho!</h1>
+                  <p>Código de rastreio: <strong>${shipData.tracking}</strong></p>
+                  <p>Equipe Still Informatica</p>`
+              }
+            });
+          }
+        } catch (e) { console.error("Erro etiqueta:", e); }
       }
     } else {
       console.warn("Could not determine reference_id and status from notification");
