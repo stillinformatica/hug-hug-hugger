@@ -125,7 +125,7 @@ serve(async (req) => {
         console.log("PAID detected — disparando emails + etiqueta");
 
         const SELLER_EMAIL = "stillinformatica@stillinformatica.com.br";
-        const FROM = "Still Informatica <onboarding@resend.dev>";
+        const FROM = "Still Informatica <stillinformatica@stillinformatica.com.br>";
         const itemsHtml = (Array.isArray(updatedOrder.items) ? updatedOrder.items : [])
           .map((i: any) => `<li>${i.quantity}x ${i.name} — R$ ${Number(i.unit_amount || i.price || 0).toFixed(2)}</li>`)
           .join("");
