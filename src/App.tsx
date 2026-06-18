@@ -13,6 +13,7 @@ import Checkout from "./pages/Checkout";
 import Anuncios from "./pages/Anuncios";
 import ScreenshotsGallery from "./pages/Screenshots";
 import TotalExpressConfig from "./pages/TotalExpressConfig";
+import PedidoConcluido from "./pages/PedidoConcluido";
 
 
 const queryClient = new QueryClient();
