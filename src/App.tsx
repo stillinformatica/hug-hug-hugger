@@ -13,6 +13,7 @@ import Checkout from "./pages/Checkout";
 import Anuncios from "./pages/Anuncios";
 import ScreenshotsGallery from "./pages/Screenshots";
 import TotalExpressConfig from "./pages/TotalExpressConfig";
+import PedidoConcluido from "./pages/PedidoConcluido";
 
 
 const queryClient = new QueryClient();
@@ -31,6 +32,7 @@ const AppContent = () => {
 
         <Route path="/total-express-config" element={<TotalExpressConfig />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/pedido-concluido" element={<PedidoConcluido />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
       </Routes>
