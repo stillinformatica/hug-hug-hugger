@@ -230,18 +230,48 @@ serve(async (req) => {
           });
           console.log("Etiqueta result:", shipData, shipErr);
 
-          if (shipData?.success && shipData?.tracking) {
-            await supabase.functions.invoke("send-email", {
-              body: {
-                from: DEFAULT_FROM,
-                reply_to: SELLER_EMAIL,
-                to: updatedOrder.customer_email,
-                subject: `Seu pedido ${updatedOrder.reference_id} foi postado`,
-                html: `<h1>Pedido a caminho!</h1>
-                  <p>Código de rastreio: <strong>${shipData.tracking}</strong></p>
-                  <p>Equipe Still Informatica</p>`
-              }
-            });
+          if (shipData?.success) {
+            const tracking = shipData.tracking ? escapeHtml(shipData.tracking) : null;
+            const labelUrl = shipData.label_url || shipData.print_url || shipData.url || null;
+            const labelLinkHtml = labelUrl
+              ? `<p><a href="${escapeHtml(labelUrl)}">Abrir etiqueta para impressão</a></p>`
+              : "<p>A etiqueta estará disponível no painel do Melhor Envio.</p>";
+
+            // E-mail para o vendedor com a etiqueta
+            try {
+              await supabase.functions.invoke("send-email", {
+                body: {
+                  from: DEFAULT_FROM,
+                  reply_to: SELLER_EMAIL,
+                  to: SELLER_EMAIL,
+                  subject: `Etiqueta gerada — Pedido ${updatedOrder.reference_id}`,
+                  html: `<h1>Etiqueta pronta para envio</h1>
+                    <p><strong>Pedido:</strong> ${reference}</p>
+                    <p><strong>Cliente:</strong> ${customerName}</p>
+                    ${tracking ? `<p><strong>Rastreio:</strong> ${tracking}</p>` : ""}
+                    ${labelLinkHtml}
+                    <h3>Endereço de entrega</h3><p>${addrHtml}</p>`
+                }
+              });
+            } catch (e) { console.error("Erro email etiqueta vendedor:", e); }
+
+            // E-mail para o cliente com rastreio
+            if (tracking && customerEmail) {
+              try {
+                await supabase.functions.invoke("send-email", {
+                  body: {
+                    from: DEFAULT_FROM,
+                    reply_to: SELLER_EMAIL,
+                    to: customerEmail,
+                    subject: `Seu pedido ${updatedOrder.reference_id} foi postado`,
+                    html: `<h1>Pedido a caminho!</h1>
+                      <p>Olá ${customerName}, seu pedido foi postado.</p>
+                      <p>Código de rastreio: <strong>${tracking}</strong></p>
+                      <p>Equipe Still Informatica</p>`
+                  }
+                });
+              } catch (e) { console.error("Erro email rastreio cliente:", e); }
+            }
           }
         } catch (e) { console.error("Erro etiqueta:", e); }
       }
