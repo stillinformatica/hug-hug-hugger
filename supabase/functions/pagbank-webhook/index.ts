@@ -137,6 +137,14 @@ serve(async (req) => {
 
     if (referenceId && status) {
       console.log(`Updating order ${referenceId} to status ${status}`);
+      const { data: existingOrder } = await supabase
+        .from("orders")
+        .select("status")
+        .eq("reference_id", referenceId)
+        .maybeSingle();
+      const wasAlreadyConfirmed = existingOrder?.status
+        ? paymentConfirmedStatuses.has(existingOrder.status)
+        : false;
       
       const { data: updatedOrder, error } = await supabase
         .from("orders")
@@ -157,7 +165,7 @@ serve(async (req) => {
       }
 
       // Disparar confirmação quando o pagamento for aprovado pelo PagBank.
-      if (updatedOrder && paymentConfirmedStatuses.has(status)) {
+      if (updatedOrder && paymentConfirmedStatuses.has(status) && !wasAlreadyConfirmed) {
         console.log("Pagamento confirmado — disparando emails");
 
         const itemsHtml = buildItemsHtml(updatedOrder.items);
