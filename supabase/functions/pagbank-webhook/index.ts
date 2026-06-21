@@ -7,6 +7,42 @@ const corsHeaders = {
 };
 
 const PAGBANK_PROD_WS = "https://ws.pagseguro.uol.com.br";
+const SELLER_EMAIL = "stillinformatica@stillinformatica.com.br";
+const DEFAULT_FROM = "Still Informatica <onboarding@resend.dev>";
+
+const paymentConfirmedStatuses = new Set(["PAID", "AVAILABLE"]);
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatCurrency(value: unknown): string {
+  return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function buildItemsHtml(items: unknown): string {
+  if (!Array.isArray(items) || items.length === 0) return "<li>Itens do pedido confirmados.</li>";
+  return items.map((item) => {
+    const data = item as Record<string, unknown>;
+    const quantity = Number(data.quantity || 1);
+    const name = escapeHtml(data.name || "Produto");
+    const unitAmount = formatCurrency(data.unit_amount || data.price || 0);
+    return `<li>${quantity}x ${name} — ${unitAmount}</li>`;
+  }).join("");
+}
+
+function buildAddressHtml(address: unknown): string {
+  const data = (address || {}) as Record<string, unknown>;
+  const line1 = `${escapeHtml(data.street)}, ${escapeHtml(data.number)} ${escapeHtml(data.complement)}`.trim();
+  const line2 = `${escapeHtml(data.locality || data.neighborhood)} - ${escapeHtml(data.city)}/${escapeHtml(data.region_code || data.state)}`.trim();
+  const postalCode = escapeHtml(data.postal_code);
+  return `${line1 || "Endereço informado no checkout"}<br>${line2}<br>CEP: ${postalCode}`;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -101,6 +137,14 @@ serve(async (req) => {
 
     if (referenceId && status) {
       console.log(`Updating order ${referenceId} to status ${status}`);
+      const { data: existingOrder } = await supabase
+        .from("orders")
+        .select("status")
+        .eq("reference_id", referenceId)
+        .maybeSingle();
+      const wasAlreadyConfirmed = existingOrder?.status
+        ? paymentConfirmedStatuses.has(existingOrder.status)
+        : false;
       
       const { data: updatedOrder, error } = await supabase
         .from("orders")
@@ -120,54 +164,64 @@ serve(async (req) => {
         console.log("Order updated successfully");
       }
 
-      // Disparar pós-pagamento apenas quando PAID e ainda sem etiqueta
-      if (updatedOrder && status === "PAID" && !updatedOrder.shipping_label_id) {
-        console.log("PAID detected — disparando emails + etiqueta");
+      // Disparar confirmação quando o pagamento for aprovado pelo PagBank.
+      if (updatedOrder && paymentConfirmedStatuses.has(status) && !wasAlreadyConfirmed) {
+        console.log("Pagamento confirmado — disparando emails");
 
-        const SELLER_EMAIL = "stillinformatica@stillinformatica.com.br";
-        const FROM = "Still Informatica <stillinformatica@stillinformatica.com.br>";
-        const itemsHtml = (Array.isArray(updatedOrder.items) ? updatedOrder.items : [])
-          .map((i: any) => `<li>${i.quantity}x ${i.name} — R$ ${Number(i.unit_amount || i.price || 0).toFixed(2)}</li>`)
-          .join("");
-        const addr = updatedOrder.shipping_address || {};
-        const addrHtml = `${addr.street || ""}, ${addr.number || ""} ${addr.complement || ""}<br>${addr.locality || ""} - ${addr.city || ""}/${addr.region_code || ""}<br>CEP: ${addr.postal_code || ""}`;
-        const total = Number(updatedOrder.total_amount || 0).toFixed(2);
+        const itemsHtml = buildItemsHtml(updatedOrder.items);
+        const addrHtml = buildAddressHtml(updatedOrder.shipping_address);
+        const total = formatCurrency(updatedOrder.total_amount);
+        const customerEmail = String(updatedOrder.customer_email || "").trim();
+        const customerName = escapeHtml(updatedOrder.customer_name || "Cliente");
+        const reference = escapeHtml(updatedOrder.reference_id);
 
-        // Email comprador
+        if (customerEmail) {
+          try {
+            await supabase.functions.invoke("send-email", {
+              body: {
+                from: DEFAULT_FROM,
+                reply_to: SELLER_EMAIL,
+                to: customerEmail,
+                subject: `Compra confirmada — Pedido ${updatedOrder.reference_id}`,
+                html: `<h1>Compra confirmada!</h1>
+                  <p>Olá ${customerName}, recebemos a confirmação do pagamento da sua compra.</p>
+                  <p><strong>Pedido:</strong> ${reference}</p>
+                  <p><strong>Total:</strong> ${total}</p>
+                  <h3>Itens</h3><ul>${itemsHtml}</ul>
+                  <h3>Endereço de entrega</h3><p>${addrHtml}</p>
+                  <p>Em breve enviaremos as informações de envio e rastreamento.</p>
+                  <p>Equipe Still Informatica</p>`
+              }
+            });
+          } catch (e) { console.error("Erro email comprador:", e); }
+        } else {
+          console.warn("Pedido pago sem email do cliente; confirmação ao cliente não enviada.");
+        }
+
         try {
           await supabase.functions.invoke("send-email", {
             body: {
-              from: FROM,
-              to: updatedOrder.customer_email,
-              subject: `Pagamento confirmado — Pedido ${updatedOrder.reference_id}`,
-              html: `<h1>Obrigado pela sua compra!</h1>
-                <p>Olá ${updatedOrder.customer_name || ""}, recebemos a confirmação do seu pagamento.</p>
-                <p><strong>Pedido:</strong> ${updatedOrder.reference_id}</p>
-                <p><strong>Total:</strong> R$ ${total}</p>
-                <h3>Itens</h3><ul>${itemsHtml}</ul>
-                <h3>Endereço de entrega</h3><p>${addrHtml}</p>
-                <p>Em breve enviaremos seu código de rastreio.</p>
-                <p>Equipe Still Informatica</p>`
-            }
-          });
-        } catch (e) { console.error("Erro email comprador:", e); }
-
-        // Email vendedor
-        try {
-          await supabase.functions.invoke("send-email", {
-            body: {
-              from: FROM,
+              from: DEFAULT_FROM,
+              reply_to: SELLER_EMAIL,
               to: SELLER_EMAIL,
-              subject: `Nova venda PAGA — ${updatedOrder.reference_id} — R$ ${total}`,
+              subject: `Nova venda paga — ${updatedOrder.reference_id} — ${total}`,
               html: `<h1>Nova venda confirmada</h1>
-                <p><strong>Pedido:</strong> ${updatedOrder.reference_id}</p>
-                <p><strong>Cliente:</strong> ${updatedOrder.customer_name || ""} (${updatedOrder.customer_email})</p>
-                <p><strong>Total:</strong> R$ ${total}</p>
+                <p><strong>Pedido:</strong> ${reference}</p>
+                <p><strong>Cliente:</strong> ${customerName} (${escapeHtml(customerEmail)})</p>
+                <p><strong>Total:</strong> ${total}</p>
                 <h3>Itens</h3><ul>${itemsHtml}</ul>
                 <h3>Entrega</h3><p>${addrHtml}</p>`
             }
           });
         } catch (e) { console.error("Erro email vendedor:", e); }
+
+        if (updatedOrder.shipping_label_id) {
+          console.log("Etiqueta já existente; pulando nova geração.");
+          return new Response(JSON.stringify({ success: true }), {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
 
         // Gerar etiqueta Melhor Envio (cart + checkout + generate)
         try {
@@ -179,7 +233,8 @@ serve(async (req) => {
           if (shipData?.success && shipData?.tracking) {
             await supabase.functions.invoke("send-email", {
               body: {
-                from: FROM,
+                from: DEFAULT_FROM,
+                reply_to: SELLER_EMAIL,
                 to: updatedOrder.customer_email,
                 subject: `Seu pedido ${updatedOrder.reference_id} foi postado`,
                 html: `<h1>Pedido a caminho!</h1>

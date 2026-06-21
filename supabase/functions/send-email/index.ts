@@ -13,6 +13,7 @@ interface EmailPayload {
   subject: string;
   html: string;
   from?: string;
+  reply_to?: string;
 }
 
 serve(async (req) => {
@@ -24,7 +25,14 @@ serve(async (req) => {
   try {
     const body = await req.json();
     console.log("Email Payload:", JSON.stringify({ ...body, html: body.html?.substring(0, 50) + "..." }));
-    const { to, subject, html, from } = body as EmailPayload;
+    const { to, subject, html, from, reply_to } = body as EmailPayload;
+
+    if (!to || !subject || !html) {
+      return new Response(JSON.stringify({ error: "Destinatário, assunto e conteúdo são obrigatórios" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     if (!RESEND_API_KEY) {
       console.error("RESEND_API_KEY is missing");
@@ -33,6 +41,11 @@ serve(async (req) => {
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const GATEWAY_URL = "https://connector-gateway.lovable.dev/resend";
+
+    if (!LOVABLE_API_KEY) {
+      console.error("LOVABLE_API_KEY is missing");
+      throw new Error("LOVABLE_API_KEY not configured");
+    }
 
     console.log("Sending email via Resend Gateway to:", to);
     const res = await fetch(`${GATEWAY_URL}/emails`, {
@@ -47,6 +60,7 @@ serve(async (req) => {
         to: [to],
         subject: subject,
         html: html,
+        ...(reply_to ? { reply_to } : {}),
       }),
     });
 
