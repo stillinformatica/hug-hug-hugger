@@ -7,6 +7,42 @@ const corsHeaders = {
 };
 
 const PAGBANK_PROD_WS = "https://ws.pagseguro.uol.com.br";
+const SELLER_EMAIL = "stillinformatica@stillinformatica.com.br";
+const DEFAULT_FROM = "Still Informatica <onboarding@resend.dev>";
+
+const paymentConfirmedStatuses = new Set(["PAID", "AVAILABLE"]);
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatCurrency(value: unknown): string {
+  return Number(value || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function buildItemsHtml(items: unknown): string {
+  if (!Array.isArray(items) || items.length === 0) return "<li>Itens do pedido confirmados.</li>";
+  return items.map((item) => {
+    const data = item as Record<string, unknown>;
+    const quantity = Number(data.quantity || 1);
+    const name = escapeHtml(data.name || "Produto");
+    const unitAmount = formatCurrency(data.unit_amount || data.price || 0);
+    return `<li>${quantity}x ${name} — ${unitAmount}</li>`;
+  }).join("");
+}
+
+function buildAddressHtml(address: unknown): string {
+  const data = (address || {}) as Record<string, unknown>;
+  const line1 = `${escapeHtml(data.street)}, ${escapeHtml(data.number)} ${escapeHtml(data.complement)}`.trim();
+  const line2 = `${escapeHtml(data.locality || data.neighborhood)} - ${escapeHtml(data.city)}/${escapeHtml(data.region_code || data.state)}`.trim();
+  const postalCode = escapeHtml(data.postal_code);
+  return `${line1 || "Endereço informado no checkout"}<br>${line2}<br>CEP: ${postalCode}`;
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
