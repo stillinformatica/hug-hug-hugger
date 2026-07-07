@@ -26,6 +26,7 @@ const AppContent = () => {
         <Route path="/" element={<Index />} />
         <Route path="/produto/:handle" element={<ProductDetail />} />
         <Route path="/checkout" element={<Checkout />} />
+        <Route path="/auth" element={<Auth />} />
         <Route path="/anuncios" element={<Anuncios />} />
         <Route path="/screenshots" element={<ScreenshotsGallery />} />
         <Route path="/fotos-erros" element={<ScreenshotsGallery />} />
