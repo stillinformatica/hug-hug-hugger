@@ -47,14 +47,22 @@ const OrdersManager = () => {
   }, []);
 
   const handleGenerateLabel = async (order: Order) => {
+    const cpf = window.prompt(
+      `Informe o CPF/CNPJ do destinatário (${order.customer_name}) — somente números:`
+    );
+    if (!cpf || cpf.replace(/\D/g, "").length < 11) {
+      toast.error("CPF/CNPJ inválido");
+      return;
+    }
     setGeneratingLabelId(order.id);
     try {
       const { data, error } = await supabase.functions.invoke("calculate-shipping", {
         body: { 
           action: "register_collection",
-          order: order 
+          order: { ...order, customer_cpf: cpf }
         }
       });
+
 
       if (error) throw error;
 
