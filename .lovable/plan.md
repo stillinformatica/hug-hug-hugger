@@ -1,20 +1,20 @@
-I will help you set up PagBank production and fix the AI tips error.
+# Corrigir os riscos de segurança do site
 
-### 1. PagBank Production Setup
-To move to production, you need to update your credentials and generate a public key:
+## Objetivo
+Eliminar vulnerabilidades exploráveis no acesso administrativo, pagamentos, e-mails, frete, sincronização de produtos, banco e dependências, sem interromper a compra pública.
 
-*   **Update Token:** Go to the project settings (Secrets) and update `PAGBANK_TOKEN` with the production token you generated in iBanking.
-*   **Public Key:** I've created a new function to generate the required production public key. Once you update the token, I will run it for you.
-*   **Production Test:** We will perform a real transaction test to generate the logs requested by PagBank.
+## Etapas
+1. Remover o mecanismo inseguro que cria/promove administrador com senha fixa e impedir qualquer elevação de privilégio pelo navegador.
+2. Exigir autenticação e função de administrador nas operações privilegiadas: geração de etiqueta, envio manual de e-mail e limpeza/sincronização de produtos.
+3. Endurecer o checkout público: validar e limitar todos os campos, recalcular produtos e preços no servidor e não devolver dados internos ou chaves desnecessárias.
+4. Validar notificações do PagBank consultando o pagamento diretamente no provedor antes de atualizar pedidos, evitando confirmações falsas.
+5. Restringir permissões do banco e execução de funções sensíveis, mantendo leitura pública somente do catálogo.
+6. Atualizar dependências vulneráveis para versões corrigidas e preservar compatibilidade.
+7. Ativar proteções de senha vazada e exigência da senha atual para alterações.
+8. Executar testes, auditorias de dependências, banco e segurança novamente; corrigir qualquer falha restante.
 
-### 2. Fix AI Tips Error (400)
-The error you saw ("Falha na IA: 400") is likely due to an invalid model name in the tips functions. I will update them to use a stable model.
-
-### Technical Details
-*   Deploying `pagbank-public-key` edge function to fetch the production public key.
-*   Updating `marriage-tips` and `growth-tips` edge functions to use `google/gemini-2.0-flash` instead of the non-existent version.
-*   Updating `Checkout.tsx` logic if needed (currently it uses redirect checkout which is simpler for production validation).
-
-### Steps to follow:
-1.  **Update the `PAGBANK_TOKEN`** in your project settings.
-2.  I will then generate the public key and we can perform the test purchase.
+## Detalhes técnicos
+- A autenticação administrativa continuará baseada em `user_roles` e políticas do banco.
+- Funções públicas necessárias ao checkout terão validação Zod, limites de payload e respostas sem detalhes sensíveis.
+- Webhooks serão tratados como entrada não confiável e confirmados contra a API PagBank.
+- As funções de banco com privilégios elevados terão `EXECUTE` revogado de usuários anônimos e liberado apenas ao papel estritamente necessário.
