@@ -1,7 +1,10 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
-import { corsHeaders } from "npm:@supabase/supabase-js@2/cors";
+export const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
-export { corsHeaders };
 export function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 }
@@ -16,8 +19,10 @@ export async function requireAdmin(req: Request): Promise<void> {
   const client = createClient(url, key);
   const { data, error } = await client.auth.getUser(token);
   if (error || !data.user) throw json({ error: "Sessão inválida" }, 401);
-  const roles = await client.from("user_roles").select("id").eq("user_id", data.user.id).eq("role", "admin").maybeSingle();
-  if (roles.error || !roles.data) throw json({ error: "Acesso restrito" }, 403);
+  // The database applies owner identity AND MFA to the server-validated session.
+  const caller = createClient(url, key, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { persistSession: false } });
+  const { data: allowed, error: accessError } = await caller.rpc("has_role", { _user_id: data.user.id, _role: "admin" });
+  if (accessError || allowed !== true) throw json({ error: "Acesso restrito: confirme a autenticação em duas etapas" }, 403);
 }
 export async function readBody(req: Request): Promise<unknown> {
   if (req.method !== "POST") throw json({ error: "Método não permitido" }, 405);
