@@ -1,3 +1,4 @@
+import { requireAdmin, readBody } from "../_shared/security.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
@@ -23,8 +24,8 @@ serve(async (req) => {
   }
 
   try {
-    const body = await req.json();
-    console.log("Email Payload:", JSON.stringify({ ...body, html: body.html?.substring(0, 50) + "..." }));
+    await requireAdmin(req);
+    const body = await readBody(req);
     const { to, subject, html, from, reply_to } = body as EmailPayload;
 
     if (!to || !subject || !html) {
@@ -47,7 +48,6 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY not configured");
     }
 
-    console.log("Sending email via Resend Gateway to:", to);
     const res = await fetch(`${GATEWAY_URL}/emails`, {
       method: "POST",
       headers: {
@@ -65,7 +65,6 @@ serve(async (req) => {
     });
 
     const data = await res.json();
-    console.log("Resend API Response:", JSON.stringify(data));
 
     if (!res.ok) {
       throw new Error(JSON.stringify(data));
@@ -76,6 +75,7 @@ serve(async (req) => {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Email error:", error);
     return new Response(JSON.stringify({ error: String(error) }), {
       status: 500,
