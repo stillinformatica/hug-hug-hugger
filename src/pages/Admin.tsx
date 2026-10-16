@@ -41,7 +41,7 @@ const Admin = () => {
   useEffect(() => {
     if (!authLoading && (!user || !isAdmin)) {
       toast.error("Acesso restrito a administradores");
-      navigate("/");
+      navigate("/auth", { replace: true });
     }
   }, [user, isAdmin, authLoading, navigate]);
 
@@ -62,6 +62,7 @@ const Admin = () => {
   }, [user, isAdmin]);
 
   const handleSaveAddress = async () => {
+    if (!user || !isAdmin) return;
     setSaving(true);
     try {
       const { data: existing } = await supabase
@@ -71,14 +72,16 @@ const Admin = () => {
         .maybeSingle();
 
       if (existing) {
-        await supabase
+        const { error } = await supabase
           .from('admin_settings')
-          .update({ value: JSON.parse(JSON.stringify(address)), updated_by: user!.id, updated_at: new Date().toISOString() })
+          .update({ value: JSON.parse(JSON.stringify(address)), updated_by: user.id, updated_at: new Date().toISOString() })
           .eq('key', 'sender_address');
+        if (error) throw error;
       } else {
-        await supabase
+        const { error } = await supabase
           .from('admin_settings')
-          .insert([{ key: 'sender_address', value: JSON.parse(JSON.stringify(address)), updated_by: user!.id }]);
+          .insert([{ key: 'sender_address', value: JSON.parse(JSON.stringify(address)), updated_by: user.id }]);
+        if (error) throw error;
       }
       toast.success("Endereço de remetente salvo com sucesso!");
     } catch {
