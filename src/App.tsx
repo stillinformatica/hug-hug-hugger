@@ -14,6 +14,7 @@ import Anuncios from "./pages/Anuncios";
 import ScreenshotsGallery from "./pages/Screenshots";
 import TotalExpressConfig from "./pages/TotalExpressConfig";
 import PedidoConcluido from "./pages/PedidoConcluido";
+import { OwnerOnly } from "./components/OwnerOnly";
 
 
 const queryClient = new QueryClient();
@@ -28,10 +29,10 @@ const AppContent = () => {
         <Route path="/checkout" element={<Checkout />} />
         <Route path="/auth" element={<Auth />} />
         <Route path="/anuncios" element={<Anuncios />} />
-        <Route path="/screenshots" element={<ScreenshotsGallery />} />
-        <Route path="/fotos-erros" element={<ScreenshotsGallery />} />
+        <Route path="/screenshots" element={<OwnerOnly><ScreenshotsGallery /></OwnerOnly>} />
+        <Route path="/fotos-erros" element={<OwnerOnly><ScreenshotsGallery /></OwnerOnly>} />
 
-        <Route path="/total-express-config" element={<TotalExpressConfig />} />
+        <Route path="/total-express-config" element={<OwnerOnly><TotalExpressConfig /></OwnerOnly>} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/pedido-concluido" element={<PedidoConcluido />} />
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
