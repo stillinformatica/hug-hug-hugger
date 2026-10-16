@@ -4,14 +4,8 @@ import type { User } from '@supabase/supabase-js';
 
 async function checkAdmin(userId: string): Promise<boolean> {
   try {
-    const { data } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', userId)
-      .eq('role', 'admin')
-      .maybeSingle();
-
-    return !!data;
+    const { data, error } = await supabase.rpc('has_role', { _user_id: userId, _role: 'admin' });
+    return !error && data === true;
   } catch {
     return false;
   }
@@ -43,13 +37,18 @@ export function useAuth() {
       setLoading(false);
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      void syncUserState(session?.user ?? null);
+    const refresh = async () => {
+      const { data, error } = await supabase.auth.getUser();
+      await syncUserState(error ? null : data.user);
+    };
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+      // Run outside the auth callback to avoid waiting on the client's auth lock.
+      setTimeout(() => { if (mounted) void refresh(); }, 0);
     });
 
     void supabase.auth
-      .getSession()
-      .then(({ data: { session } }) => syncUserState(session?.user ?? null))
+      .getUser()
+      .then(({ data, error }) => syncUserState(error ? null : data.user))
       .catch(() => {
         if (!mounted) return;
         setUser(null);

@@ -110,6 +110,7 @@ serve(async (req) => {
       const notificationType = params.get("notificationType");
 
       if (notificationCode && notificationType === "transaction") {
+        if (!PAGBANK_TOKEN) return new Response("Payment verification unavailable", {status:503,headers:corsHeaders});
         if (!/^[A-Za-z0-9-]{1,100}$/.test(notificationCode)) return new Response("Invalid code",{status:400,headers:corsHeaders});
         
         const response = await fetch(
@@ -125,6 +126,11 @@ serve(async (req) => {
           const refMatch = xmlText.match(/<reference>(.*?)<\/reference>/);
           const statusMatch = xmlText.match(/<status>(.*?)<\/status>/);
           const codeMatch = xmlText.match(/<code>(.*?)<\/code>/);
+          const amountMatch = xmlText.match(/<grossAmount>(.*?)<\/grossAmount>/);
+          const legacyReference = refMatch?.[1];
+          if (!legacyReference || !codeMatch?.[1] || !amountMatch?.[1]) return new Response("Incomplete payment verification", {status:409,headers:corsHeaders});
+          const { data: legacyStored } = await supabase.from("orders").select("reference_id,pagbank_id,total_amount").eq("reference_id", legacyReference).maybeSingle();
+          if (!legacyStored || !matchesPayment(legacyStored, { reference_id: legacyReference, id: codeMatch[1], amount: Math.round(Number(amountMatch[1]) * 100) })) return new Response("Payment mismatch", {status:409,headers:corsHeaders});
 
           referenceId = refMatch ? refMatch[1] : null;
           pagbankId = codeMatch ? codeMatch[1] : null;
