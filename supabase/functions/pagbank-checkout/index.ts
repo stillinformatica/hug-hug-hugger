@@ -1,202 +1,48 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-};
-
-const PAGBANK_BASE_URL = "https://api.pagseguro.com"; // Keep production URL unless debugging specifically with sandbox
-
-serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: corsHeaders });
-  }
-
-  try {
-    const PAGBANK_TOKEN = Deno.env.get("PAGBANK_TOKEN");
-    const PAGBANK_PUBLIC_KEY = Deno.env.get("PAGBANK_PUBLIC_KEY");
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-
-    if (!PAGBANK_TOKEN) {
-      return new Response(
-        JSON.stringify({ error: "PAGBANK_TOKEN não configurado" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const body = await req.json();
-    const { items, customer, shipping } = body;
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      return new Response(
-        JSON.stringify({ error: "Items são obrigatórios" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const referenceId = `STILL${Date.now()}`; // Shorter and no underscores just in case
-
-    const orderItems = items.map((item: { name: string; quantity: number; unit_amount: number }, index: number) => ({
-      reference_id: `item_${index + 1}`,
-      name: item.name.substring(0, 64),
-      quantity: item.quantity,
-      unit_amount: Math.max(1, Math.round(item.unit_amount * 100)), // Ensure at least 0.01
-    }));
-
-    const totalAmount = orderItems.reduce(
-      (sum: number, item: { unit_amount: number; quantity: number }) => sum + item.unit_amount * item.quantity,
-      0
-    );
-
-    // Webhook URL via edge function
-    const webhookUrl = `${SUPABASE_URL}/functions/v1/pagbank-webhook`;
-
-    const checkoutPayload: any = {
-      reference_id: referenceId,
-      items: orderItems,
-      soft_descriptor: "STILLINF",
-      payment_methods: [
-        { type: "CREDIT_CARD" },
-        { type: "DEBIT_CARD" },
-        { type: "BOLETO" },
-        { type: "PIX" },
-      ],
-      // IMPORTANT: PagBank anexa seus próprios parâmetros à URL.
-      // URLs com query string causam loop de redirecionamento.
-      redirect_urls: {
-        return_url: "https://stillinformatica.com.br/pedido-concluido",
-        back_url: "https://stillinformatica.com.br/checkout",
-      },
-      notification_urls: [webhookUrl],
-    };
-
-    if (customer) {
-      const phoneDigits = (customer.phone || "").replace(/\D/g, "");
-      const taxId = (customer.cpf || "").replace(/\D/g, "");
-      checkoutPayload.customer = {
-        name: customer.name,
-        email: customer.email,
-        tax_id: taxId,
-        phones: phoneDigits.length >= 10 ? [{
-          country: "55",
-          area: phoneDigits.substring(0, 2),
-          number: phoneDigits.substring(2),
-          type: phoneDigits.length === 11 ? "MOBILE" : "HOME"
-        }] : []
-      };
-    }
-
-    if (shipping) {
-      checkoutPayload.shipping = {
-        type: "FIXED",
-        amount: Math.round((shipping.amount || 0) * 100),
-        address: {
-          street: shipping.street,
-          number: shipping.number && shipping.number !== "S/N" ? shipping.number : "1",
-          complement: shipping.complement || "N/A",
-          locality: shipping.locality,
-          city: shipping.city,
-          region_code: shipping.region_code,
-          country: "BRA",
-          postal_code: shipping.postal_code?.replace(/\D/g, ""),
-        }
-      };
-    }
-
-    const payloadJson = JSON.stringify(checkoutPayload);
-    console.log("=== PAGBANK CHECKOUT REQUEST ===");
-    console.log("URL:", `${PAGBANK_BASE_URL}/checkouts`);
-    console.log("Webhook URL:", webhookUrl);
-    console.log("Payload:", payloadJson);
-
-    const response = await fetch(`${PAGBANK_BASE_URL}/checkouts`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${PAGBANK_TOKEN}`,
-        "x-api-version": "4.0",
-      },
-      body: payloadJson,
-    });
-
-    const responseText = await response.text();
-    console.log("=== PAGBANK CHECKOUT RESPONSE ===");
-    console.log("Status:", response.status);
-    console.log("Body:", responseText);
-
-    if (response.ok) {
-      const data = JSON.parse(responseText);
-      console.log("PagBank API Data:", JSON.stringify(data));
-      
-      const paymentLink = data.links?.find((l: { rel: string }) => l.rel === "PAY");
-      let paymentUrl = paymentLink?.href;
-      
-      // Transform redirection URL to direct checkout if needed to avoid loops
-      if (paymentUrl && paymentUrl.includes("pagamento.pagbank.com.br/pagamento")) {
-        // Try to replace the standard redirect with a direct checkout if the loop persists
-        // but for now, we'll try to use the raw checkout ID for better stability
-        console.log("Using primary payment link:", paymentUrl);
-      }
-      
-      if (!paymentUrl) {
-        console.error("PagBank API returned no payment link. Available links:", data.links);
-        return new Response(
-          JSON.stringify({ 
-            error: "Sua conta PagSeguro não retornou um link de pagamento.",
-            details: data 
-          }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      // Save order to database
-      if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-        try {
-          const { error: dbError } = await supabase.from("orders").insert({
-            reference_id: referenceId,
-            pagbank_id: data.id,
-            status: "CREATED",
-            customer_name: customer?.name || null,
-            customer_email: customer?.email || null,
-            total_amount: totalAmount / 100,
-            items: items,
-            shipping_address: shipping || null,
-          });
-          if (dbError) console.error("Error saving order to DB:", dbError);
-          else console.log("Order successfully saved to DB:", referenceId);
-        } catch (dbEx) {
-          console.error("Exception saving order to DB:", dbEx);
-        }
-      }
-
-      return new Response(
-        JSON.stringify({
-          id: data.id,
-          payment_url: paymentUrl,
-          public_key: PAGBANK_PUBLIC_KEY,
-          reference_id: referenceId,
-          status: "CREATED",
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    return new Response(
-      JSON.stringify({
-        error: "Erro no checkout PagBank",
-        details: responseText,
-        status_code: response.status,
-      }),
-      { status: response.status || 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  } catch (error) {
-    console.error("Checkout error:", error);
-    return new Response(
-      JSON.stringify({ error: "Erro interno no servidor", details: String(error) }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
+import { createClient } from "npm:@supabase/supabase-js@2";
+import { z } from "npm:zod@3";
+import { corsHeaders, json, readBody } from "../_shared/security.ts";
+import { catalogItems } from "../_shared/payment-rules.ts";
+const addressSchema = z.object({
+  street:z.string().trim().min(1).max(160), number:z.string().trim().min(1).max(20), complement:z.string().max(40).optional(),
+  locality:z.string().trim().min(1).max(60),city:z.string().trim().min(1).max(60),region_code:z.string().regex(/^[A-Z]{2}$/),
+  postal_code:z.string().regex(/^\d{8}$/),shipping_service_id:z.string().min(1).max(50),amount:z.number().finite().nonnegative().optional()
+});
+const schema = z.object({items:z.array(z.object({productId:z.string().uuid(),quantity:z.number().int().min(1).max(100)})).min(1).max(100),
+ customer:z.object({name:z.string().trim().min(3).max(120),email:z.string().trim().email().max(254),phone:z.string().regex(/^\d{10,11}$/),cpf:z.string().regex(/^\d{11}$/)}),shipping:addressSchema});
+Deno.serve(async req => {
+ if(req.method === "OPTIONS") return new Response("ok",{headers:corsHeaders});
+ try {
+  const parsed=schema.safeParse(await readBody(req));
+  if(!parsed.success) return json({error:"Dados inválidos",fields:parsed.error.flatten().fieldErrors},400);
+  const {customer,shipping}=parsed.data;
+  const url=Deno.env.get("SUPABASE_URL"),key=Deno.env.get("SUPABASE_SERVICE_ROLE_KEY"),token=Deno.env.get("PAGBANK_TOKEN");
+  if(!url||!key||!token) return json({error:"Configuração incompleta"},503);
+  const db=createClient(url,key);
+  const catalog=await db.from("announced_products").select("id,name,price,weight,width,height,length").in("id",parsed.data.items.map(i=>i.productId));
+  if(catalog.error) throw new Error("Catálogo indisponível");
+  let items;
+  try {items=catalogItems(parsed.data.items,catalog.data||[]);}catch{return json({error:"Produto indisponível ou quantidade inválida"},400);}
+  // Requote freight on the server: browser-supplied shipping prices are not trusted.
+  const quote=await db.functions.invoke("calculate-shipping",{body:{postal_code:shipping.postal_code,items:items.map(i=>({...i,price:i.unit_amount}))}});
+  if(quote.error) return json({error:"Não foi possível confirmar o frete"},502);
+  const options=quote.data?.shipping_options;
+  const selected=Array.isArray(options)?options.find((o:{id:string})=>o.id===shipping.shipping_service_id):undefined;
+  if(!selected||!Number.isFinite(Number(selected.price))||Number(selected.price)<0) return json({error:"Selecione novamente o frete"},400);
+  const freight=Math.round(Number(selected.price)*100);
+  const referenceId=`STILL${crypto.randomUUID().replaceAll("-","")}`;
+  const orderItems=items.map(i=>({reference_id:i.id,name:i.name.slice(0,64),quantity:i.quantity,unit_amount:Math.round(i.unit_amount*100)}));
+  const total=orderItems.reduce((s,i)=>s+i.quantity*i.unit_amount,freight);
+  const payload={reference_id:referenceId,items:orderItems,soft_descriptor:"STILLINF",payment_methods:[{type:"CREDIT_CARD"},{type:"DEBIT_CARD"},{type:"BOLETO"},{type:"PIX"}],
+   redirect_urls:{return_url:"https://stillinformatica.com.br/pedido-concluido",back_url:"https://stillinformatica.com.br/checkout"},notification_urls:[`${url}/functions/v1/pagbank-webhook`],
+   customer:{name:customer.name,email:customer.email,tax_id:customer.cpf,phones:[{country:"55",area:customer.phone.slice(0,2),number:customer.phone.slice(2),type:customer.phone.length===11?"MOBILE":"HOME"}]},
+   shipping:{type:"FIXED",amount:freight,address:{street:shipping.street,number:shipping.number,complement:shipping.complement||"N/A",locality:shipping.locality,city:shipping.city,region_code:shipping.region_code,postal_code:shipping.postal_code,country:"BRA"}}};
+  const response=await fetch("https://api.pagseguro.com/checkouts",{method:"POST",headers:{"Content-Type":"application/json",Authorization:`Bearer ${token}`,"x-api-version":"4.0"},body:JSON.stringify(payload)});
+  if(!response.ok){console.error("PagBank checkout failed",response.status);return json({error:"PagBank recusou a criação do checkout",status_code:response.status},502);}
+  const data=await response.json();
+  const paymentUrl=data.links?.find((l:{rel:string})=>l.rel==="PAY")?.href;
+  if(typeof paymentUrl!=="string"||!/^https:\/\/(pagamento\.pagbank\.com\.br|checkout\.pagseguro\.uol\.com\.br)\//.test(paymentUrl)) return json({error:"Link de pagamento inválido"},502);
+  const saved=await db.from("orders").insert({reference_id:referenceId,pagbank_id:data.id,status:"CREATED",customer_name:customer.name,customer_email:customer.email,total_amount:total/100,items,shipping_address:{...shipping,amount:freight/100,cpf:customer.cpf,phone:customer.phone}});
+  if(saved.error) return json({error:"Não foi possível registrar o pedido"},500);
+  return json({id:data.id,payment_url:paymentUrl,reference_id:referenceId,status:"CREATED"});
+ }catch(error){if(error instanceof Response)return error;console.error("Checkout failed");return json({error:"Não foi possível iniciar o pagamento"},500);}
 });
