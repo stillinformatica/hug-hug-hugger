@@ -1,3 +1,4 @@
+import { requireAdmin } from "../_shared/security.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
@@ -19,7 +20,8 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { action, order, postal_code, items } = body;
+    const { action, postal_code, items } = body;
+    let order = body.order;
 
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -30,6 +32,12 @@ serve(async (req) => {
     // AÇÃO: Gerar etiqueta/compra no Melhor Envio
     // ────────────────────────────────────────────────────────────────
     if (action === "register_collection" && order) {
+      await requireAdmin(req);
+      const { data: storedOrder, error: orderError } = await supabase.from("orders").select("*").eq("id", order.id).maybeSingle();
+      if (orderError || !storedOrder || !["PAID", "AVAILABLE"].includes(storedOrder.status)) return new Response(JSON.stringify({error: "Pedido pago não encontrado"}), {status: 400, headers: corsHeaders});
+      if (storedOrder.shipping_label_id) return new Response(JSON.stringify({success: true, cart_id: storedOrder.shipping_label_id, tracking: storedOrder.tracking_number}), {headers: corsHeaders});
+      order = { ...storedOrder, customer_cpf: String(order.customer_cpf || storedOrder.shipping_address?.cpf || "").replace(/\D/g, ""), customer_phone: storedOrder.shipping_address?.phone };
+      if (![11,14].includes(order.customer_cpf.length)) return new Response(JSON.stringify({error: "CPF/CNPJ obrigatório"}), {status: 400, headers: corsHeaders});
       console.log("Iniciando Integração Melhor Envio para o pedido:", order.id);
 
       if (!MELHORENVIO_TOKEN) {
@@ -303,6 +311,7 @@ serve(async (req) => {
     });
 
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Erro no cálculo de frete:", error);
     return new Response(JSON.stringify({ error: "Erro ao calcular frete" }), {
       status: 500,

@@ -1,3 +1,4 @@
+import { matchesPayment } from "../_shared/payment-rules.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 
@@ -64,8 +65,7 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const bodyText = await req.text();
-    console.log("PagBank notification received. Headers:", Object.fromEntries(req.headers.entries()));
-    console.log("Body:", bodyText);
+    if (bodyText.length > 100000) return new Response("Payload too large", {status:413,headers:corsHeaders});
 
     let notificationData: any = null;
     let referenceId: string | null = null;
@@ -77,18 +77,31 @@ serve(async (req) => {
       notificationData = JSON.parse(bodyText);
       console.log("Parsed as JSON (v4)");
 
-      // PagBank v4 Orders API webhook structure
-      if (notificationData.reference_id) {
-        referenceId = notificationData.reference_id;
-        pagbankId = notificationData.id;
-        
-        // Find status from charges
-        if (notificationData.charges && notificationData.charges.length > 0) {
-          status = notificationData.charges[0].status;
-        } else if (notificationData.status) {
-          status = notificationData.status;
-        }
+      // Notification fields are hints only. Resolve the stored checkout and verify with PagBank.
+      if (!PAGBANK_TOKEN || typeof notificationData.reference_id !== "string" || notificationData.reference_id.length > 100) return new Response("Invalid notification", {status:400,headers:corsHeaders});
+      const { data: stored } = await supabase.from("orders").select("reference_id,pagbank_id,total_amount").eq("reference_id",notificationData.reference_id).maybeSingle();
+      if (!stored?.pagbank_id || !/^(CHEC|ORDE)_[A-Za-z0-9-]+$/.test(stored.pagbank_id)) return new Response("Unknown checkout",{status:400,headers:corsHeaders});
+      const kind = stored.pagbank_id.startsWith("CHEC_") ? "checkouts" : "orders";
+      const verification = await fetch(`https://api.pagseguro.com/${kind}/${encodeURIComponent(stored.pagbank_id)}`,{headers:{Authorization:`Bearer ${PAGBANK_TOKEN}`,"x-api-version":"4.0"}});
+      if (!verification.ok) return new Response("Payment verification unavailable",{status:502,headers:corsHeaders});
+      const checkout = await verification.json();
+      let verified = checkout;
+      if (kind === "checkouts") {
+        const paidOrder = Array.isArray(checkout.orders) ? checkout.orders.find((o: {id?:string}) => o.id === notificationData.id) : null;
+        if (!paidOrder?.id || !/^ORDE_[A-Za-z0-9-]+$/.test(paidOrder.id)) return new Response("Payment not linked to checkout",{status:409,headers:corsHeaders});
+        const orderResponse=await fetch(`https://api.pagseguro.com/orders/${encodeURIComponent(paidOrder.id)}`,{headers:{Authorization:`Bearer ${PAGBANK_TOKEN}`}});
+        if (!orderResponse.ok) return new Response("Order verification unavailable",{status:502,headers:corsHeaders});
+        verified=await orderResponse.json();
       }
+      const charges=Array.isArray(verified.charges)?verified.charges:[];
+      const paid=charges.filter((c:{status:string})=>paymentConfirmedStatuses.has(c.status));
+      const amount=paid.reduce((sum:number,c:{amount?:{value?:number}})=>sum+Number(c.amount?.value||0),0);
+      if (paid.length && !matchesPayment(stored,{reference_id:verified.reference_id,id:checkout.id,amount})) return new Response("Payment mismatch",{status:409,headers:corsHeaders});
+      if (verified.reference_id !== stored.reference_id) return new Response("Reference mismatch",{status:409,headers:corsHeaders});
+      referenceId=stored.reference_id;
+      pagbankId=stored.pagbank_id;
+      status=paid.length ? "PAID" : charges[0]?.status;
+      notificationData={id:verified.id,reference_id:verified.reference_id,status};
     } catch (e) {
       // Not JSON, check if it's form-encoded (v2/v3)
       console.log("Not JSON, checking form-encoded...");
@@ -97,16 +110,16 @@ serve(async (req) => {
       const notificationType = params.get("notificationType");
 
       if (notificationCode && notificationType === "transaction") {
-        console.log("v3 Transaction notification detected. Fetching details...");
+        if (!/^[A-Za-z0-9-]{1,100}$/.test(notificationCode)) return new Response("Invalid code",{status:400,headers:corsHeaders});
         
         const response = await fetch(
-          `${PAGBANK_PROD_WS}/v3/transactions/notifications/${notificationCode}?email=${Deno.env.get("PAGBANK_EMAIL")}&token=${PAGBANK_TOKEN}`,
+          `${PAGBANK_PROD_WS}/v3/transactions/notifications/${encodeURIComponent(notificationCode)}?email=${encodeURIComponent(Deno.env.get("PAGBANK_EMAIL") || "")}&token=${encodeURIComponent(PAGBANK_TOKEN || "")}`,
           { method: "GET" }
         );
 
         if (response.ok) {
           const xmlText = await response.text();
-          console.log("v3 details received (XML):", xmlText);
+
           
           // Basic XML extraction (could use a library, but regex is faster for simple cases)
           const refMatch = xmlText.match(/<reference>(.*?)<\/reference>/);
@@ -139,9 +152,10 @@ serve(async (req) => {
       console.log(`Updating order ${referenceId} to status ${status}`);
       const { data: existingOrder } = await supabase
         .from("orders")
-        .select("status")
+        .select("status,pagbank_id,total_amount")
         .eq("reference_id", referenceId)
         .maybeSingle();
+      if (!existingOrder || (pagbankId && existingOrder.pagbank_id !== pagbankId)) return new Response("Order mismatch",{status:409,headers:corsHeaders});
       const wasAlreadyConfirmed = existingOrder?.status
         ? paymentConfirmedStatuses.has(existingOrder.status)
         : false;
@@ -155,6 +169,7 @@ serve(async (req) => {
           updated_at: new Date().toISOString(),
         })
         .eq("reference_id", referenceId)
+        .eq("status", existingOrder.status)
         .select()
         .maybeSingle();
 
@@ -285,7 +300,7 @@ serve(async (req) => {
     });
   } catch (error) {
     console.error("Unexpected error in webhook handler:", error);
-    return new Response(JSON.stringify({ error: error.message }), {
+    return new Response(JSON.stringify({ error: "Falha ao verificar pagamento" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

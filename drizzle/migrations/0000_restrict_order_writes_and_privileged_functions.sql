@@ -1,0 +1,16 @@
+DROP POLICY IF EXISTS "Anyone can initiate an order with required fields" ON public.orders;
+DROP POLICY IF EXISTS "Orders are publicly readable for webhook updates" ON public.orders;
+REVOKE INSERT, UPDATE, DELETE ON public.orders FROM anon, authenticated;
+GRANT SELECT ON public.orders TO authenticated;
+REVOKE ALL ON public.orders FROM anon;
+GRANT ALL ON public.orders TO service_role;
+DROP POLICY IF EXISTS "Admins can view all orders" ON public.orders;
+CREATE POLICY "Admins can view all orders" ON public.orders FOR SELECT TO authenticated USING (public.has_role(auth.uid(), 'admin'));
+DROP POLICY IF EXISTS "Users can view their own orders by email" ON public.orders;
+CREATE POLICY "Users can view their own orders by email" ON public.orders FOR SELECT TO authenticated USING (auth.jwt()->>'email' = customer_email AND auth.jwt()->>'email' IS NOT NULL);
+CREATE POLICY "Admins can update orders" ON public.orders FOR UPDATE TO authenticated USING (public.has_role(auth.uid(), 'admin')) WITH CHECK (public.has_role(auth.uid(), 'admin'));
+GRANT UPDATE (status, tracking_number, shipping_label_id) ON public.orders TO authenticated;
+DO $$ DECLARE f record; BEGIN FOR f IN SELECT p.oid::regprocedure AS signature FROM pg_proc p JOIN pg_namespace n ON p.pronamespace=n.oid WHERE n.nspname='public' AND p.prosecdef AND p.proname <> 'has_role' LOOP EXECUTE format('REVOKE ALL ON FUNCTION %s FROM PUBLIC, anon, authenticated', f.signature); EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO service_role', f.signature); END LOOP; END $$;
+REVOKE ALL ON FUNCTION public.has_role(uuid, public.app_role) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.has_role(uuid, public.app_role) TO authenticated, service_role;
+REVOKE CREATE ON SCHEMA public FROM PUBLIC, anon, authenticated;

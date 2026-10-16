@@ -1,3 +1,4 @@
+import { requireAdmin, readBody } from "../_shared/security.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { z } from "npm:zod@3.23.8";
 
@@ -8,12 +9,12 @@ const corsHeaders = {
 
 const ProductSchema = z.object({
   source_id: z.number().optional(),
-  name: z.string().min(1),
-  description: z.string().default(""),
-  category: z.string().default(""),
-  price: z.union([z.string(), z.number()]).transform((v) => Number(v)),
+  name: z.string().trim().min(1).max(250),
+  description: z.string().max(10000).default(""),
+  category: z.string().max(10000).default(""),
+  price: z.union([z.string(), z.number()]).transform((v) => Number(v)).pipe(z.number().finite().nonnegative().max(1000000)),
   quantity: z.number().default(0),
-  images: z.array(z.string()).default([]),
+  images: z.array(z.string().url().max(2048).refine(v => v.startsWith("https://"))).max(30).default([]),
   // Accept both English and Portuguese names
   weight: z.number().optional(),
   peso: z.number().optional(),
@@ -33,8 +34,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const rawBody = await req.json();
-    console.log("Receiving product sync request:", JSON.stringify(rawBody));
+    await requireAdmin(req);
+    const rawBody = await readBody(req);
     
     const parsed = ProductSchema.safeParse(rawBody);
     if (!parsed.success) {
@@ -54,8 +55,10 @@ Deno.serve(async (req) => {
     const width = data.width ?? data.largura ?? 15;
     const length = data.length ?? data.comprimento ?? 15;
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    if (!supabaseUrl) throw new Error("Configuração incompleta");
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseKey) throw new Error("Configuração incompleta");
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Match by source_id first, then fallback to name
@@ -113,6 +116,7 @@ Deno.serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Error receiving product:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Erro interno" }),

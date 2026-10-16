@@ -1,3 +1,4 @@
+import { requireAdmin, readBody } from "../_shared/security.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.49.1";
 import { z } from "npm:zod@3.23.8";
 
@@ -7,7 +8,7 @@ const corsHeaders = {
 };
 
 const RemoveSchema = z.object({
-  source_ids: z.array(z.number()),
+  source_ids: z.array(z.coerce.number().int().positive()).min(1).max(10000),
 });
 
 Deno.serve(async (req) => {
@@ -16,8 +17,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const rawBody = await req.json();
-    console.log("Receiving product removal request:", JSON.stringify(rawBody));
+    await requireAdmin(req);
+    const rawBody = await readBody(req);
     
     const parsed = RemoveSchema.safeParse(rawBody);
     if (!parsed.success) {
@@ -29,8 +30,10 @@ Deno.serve(async (req) => {
 
     const { source_ids } = parsed.data;
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    if (!supabaseUrl) throw new Error("Configuração incompleta");
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!supabaseKey) throw new Error("Configuração incompleta");
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     // We need to fetch all existing source_ids to compare correctly
@@ -85,6 +88,7 @@ Deno.serve(async (req) => {
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Error removing products:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Erro interno" }),

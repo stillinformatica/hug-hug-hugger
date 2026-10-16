@@ -1,3 +1,4 @@
+import { requireAdmin, readBody } from "../_shared/security.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 const corsHeaders = {
@@ -11,6 +12,7 @@ serve(async (req) => {
   }
 
   try {
+    await requireAdmin(req);
     const PAGBANK_TOKEN = Deno.env.get("PAGBANK_TOKEN");
 
     if (!PAGBANK_TOKEN) {
@@ -20,7 +22,7 @@ serve(async (req) => {
       );
     }
 
-    const { type = "card" } = await req.json().catch(() => ({}));
+    const { type = "card" } = await readBody(req).catch(() => ({}));
 
     console.log(`Generating PagBank public key (type: ${type})...`);
 
@@ -35,7 +37,6 @@ serve(async (req) => {
 
     const responseText = await response.text();
     console.log("PagBank Response Status:", response.status);
-    console.log("PagBank Response Body:", responseText);
 
     if (response.ok) {
       const data = JSON.parse(responseText);
@@ -54,6 +55,7 @@ serve(async (req) => {
       { status: response.status || 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
+    if (error instanceof Response) return error;
     console.error("Public Key error:", error);
     return new Response(
       JSON.stringify({ error: "Erro interno no servidor", details: String(error) }),
