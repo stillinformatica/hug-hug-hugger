@@ -279,6 +279,24 @@ const Checkout = () => {
         errorDescription = String(err);
       }
 
+      if (err?.context && typeof err.context.clone === "function") {
+        try {
+          const responseBody = await err.context.clone().json();
+          if (responseBody?.error) {
+            const details = responseBody.fields
+              ? JSON.stringify(responseBody.fields)
+              : responseBody.status_code
+                ? `Código ${responseBody.status_code}`
+                : "";
+            errorDescription = details
+              ? `${responseBody.error} (${details})`
+              : responseBody.error;
+          }
+        } catch {
+          // Mantém a mensagem original quando a resposta não contém JSON.
+        }
+      }
+
       // Se o erro for o ACCESS_DENIED que vimos antes
       if (errorDescription.includes("ACCESS_DENIED")) {
         errorMessage = "Acesso Negado no PagSeguro";
