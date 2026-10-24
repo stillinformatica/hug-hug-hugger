@@ -254,13 +254,8 @@ const Checkout = () => {
       }
 
       if (data && data.payment_url) {
-        console.log("Abrindo PagBank em nova aba:", data.payment_url);
-        // Abre em nova aba para evitar loop de redirecionamento por cookies de terceiros
-        const win = window.open(data.payment_url, "_blank", "noopener,noreferrer");
-        if (!win) {
-          // Fallback se o popup for bloqueado
-          window.location.href = data.payment_url;
-        }
+        console.log("Redirecionando para o checkout seguro do PagBank.");
+        window.location.href = data.payment_url;
       } else {
         console.error("Data sem payment_url:", data);
         throw new Error(data?.error || "Link de pagamento não gerado pelo PagBank. Verifique se sua conta PagSeguro está autorizada para pagamentos via API.");
