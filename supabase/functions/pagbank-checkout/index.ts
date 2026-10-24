@@ -92,5 +92,5 @@ Deno.serve(async req => {
   catch { console.error("Falha ao enviar WhatsApp de novo pedido"); }
 
   return json({id:data.id,payment_url:paymentUrl,reference_id:referenceId,status:"CREATED"});
- }catch(error){if(error instanceof Response)return error;console.error("Checkout failed");return json({error:"Não foi possível iniciar o pagamento"},500);}
+ }catch(error){if(error instanceof Response)return error;console.error("Checkout failed:",error instanceof Error?error.message:String(error));return json({error:"Não foi possível iniciar o pagamento"},500);}
 });

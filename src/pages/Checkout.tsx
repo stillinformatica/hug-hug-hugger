@@ -281,19 +281,31 @@ const Checkout = () => {
 
       if (err?.context && typeof err.context.clone === "function") {
         try {
-          const responseBody = await err.context.clone().json();
-          if (responseBody?.error) {
-            const details = responseBody.fields
-              ? JSON.stringify(responseBody.fields)
-              : responseBody.status_code
-                ? `Código ${responseBody.status_code}`
-                : "";
-            errorDescription = details
-              ? `${responseBody.error} (${details})`
-              : responseBody.error;
+          const response = err.context.clone();
+          const responseText = await response.text();
+          if (responseText) {
+            try {
+              const responseBody = JSON.parse(responseText);
+              if (responseBody?.error) {
+                const details = responseBody.fields
+                  ? JSON.stringify(responseBody.fields)
+                  : responseBody.status_code
+                    ? `Código ${responseBody.status_code}`
+                    : "";
+                errorDescription = details
+                  ? `${responseBody.error} (${details})`
+                  : responseBody.error;
+              } else {
+                errorDescription = responseText.slice(0, 500);
+              }
+            } catch {
+              errorDescription = `HTTP ${response.status}: ${responseText.slice(0, 500)}`;
+            }
+          } else {
+            errorDescription = `A função respondeu com HTTP ${response.status}, sem detalhes.`;
           }
         } catch {
-          // Mantém a mensagem original quando a resposta não contém JSON.
+          // Mantém a mensagem original se não for possível ler a resposta.
         }
       }
 
