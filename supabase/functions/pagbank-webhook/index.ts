@@ -13,6 +13,29 @@ const DEFAULT_FROM = "Still Informatica <onboarding@resend.dev>";
 
 const paymentConfirmedStatuses = new Set(["PAID", "AVAILABLE"]);
 
+async function notifyWhatsApp(message: string): Promise<void> {
+  const token = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
+  const phoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
+  const to = (Deno.env.get("WHATSAPP_RECIPIENT_PHONE") || "").replace(/\D/g, "");
+  if (!token || !phoneNumberId || !to) {
+    console.warn("Notificação WhatsApp não enviada: configure as credenciais e o destinatário.");
+    return;
+  }
+
+  const response = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "text",
+      text: { preview_url: false, body: message },
+    }),
+  });
+  if (!response.ok) console.error("Falha ao enviar notificação WhatsApp", response.status);
+}
+
 function escapeHtml(value: unknown): string {
   return String(value ?? "")
     .replace(/&/g, "&amp;")
@@ -235,6 +258,16 @@ serve(async (req) => {
             }
           });
         } catch (e) { console.error("Erro email vendedor:", e); }
+
+        const paidItems = Array.isArray(updatedOrder.items)
+          ? updatedOrder.items.map((item) => {
+              const data = item as Record<string, unknown>;
+              return `${Number(data.quantity || 1)}x ${String(data.name || "Produto")}`;
+            }).join(", ")
+          : "Itens do pedido";
+        try {
+          await notifyWhatsApp(`Pagamento confirmado\\nPedido: ${updatedOrder.reference_id}\\nCliente: ${updatedOrder.customer_name || "Cliente"}\\nTotal: ${total}\\nItens: ${paidItems}`);
+        } catch { console.error("Falha ao enviar WhatsApp de pagamento confirmado"); }
 
         if (updatedOrder.shipping_label_id) {
           console.log("Etiqueta já existente; pulando nova geração.");

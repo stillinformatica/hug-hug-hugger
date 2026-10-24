@@ -9,6 +9,34 @@ const addressSchema = z.object({
 });
 const schema = z.object({items:z.array(z.object({productId:z.string().uuid(),quantity:z.number().int().min(1).max(100)})).min(1).max(100),
  customer:z.object({name:z.string().trim().min(3).max(120),email:z.string().trim().email().max(254),phone:z.string().regex(/^\d{10,11}$/),cpf:z.string().regex(/^\d{11}$/)}),shipping:addressSchema});
+
+function escapeHtml(value: unknown): string {
+  return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
+
+async function notifyWhatsApp(message: string): Promise<void> {
+  const token = Deno.env.get("WHATSAPP_ACCESS_TOKEN");
+  const phoneNumberId = Deno.env.get("WHATSAPP_PHONE_NUMBER_ID");
+  const to = (Deno.env.get("WHATSAPP_RECIPIENT_PHONE") || "").replace(/\D/g, "");
+  if (!token || !phoneNumberId || !to) {
+    console.warn("Notificação WhatsApp não enviada: configure as credenciais e o destinatário.");
+    return;
+  }
+
+  const response = await fetch(`https://graph.facebook.com/v21.0/${phoneNumberId}/messages`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({
+      messaging_product: "whatsapp",
+      recipient_type: "individual",
+      to,
+      type: "text",
+      text: { preview_url: false, body: message },
+    }),
+  });
+  if (!response.ok) console.error("Falha ao enviar notificação WhatsApp", response.status);
+}
+
 Deno.serve(async req => {
  if(req.method === "OPTIONS") return new Response("ok",{headers:corsHeaders});
  try {
@@ -43,6 +71,26 @@ Deno.serve(async req => {
   if(typeof paymentUrl!=="string"||!/^https:\/\/(pagamento\.pagbank\.com\.br|checkout\.pagseguro\.uol\.com\.br)\//.test(paymentUrl)) return json({error:"Link de pagamento inválido"},502);
   const saved=await db.from("orders").insert({reference_id:referenceId,pagbank_id:data.id,status:"CREATED",customer_name:customer.name,customer_email:customer.email,total_amount:total/100,items,shipping_address:{...shipping,amount:freight/100,cpf:customer.cpf,phone:customer.phone}});
   if(saved.error) return json({error:"Não foi possível registrar o pedido"},500);
+
+  const sellerEmail = Deno.env.get("ORDER_NOTIFICATION_EMAIL") || "stillinformatica@stillinformatica.com.br";
+  const itemSummary = items.map((item) => `${item.quantity}x ${item.name}`).join(", ");
+  const totalText = (total / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const notificationMessage = `Novo pedido recebido\\nPedido: ${referenceId}\\nCliente: ${customer.name}\\nE-mail: ${customer.email}\\nItens: ${itemSummary}\\nTotal: ${totalText}`;
+
+  try {
+   const { error: emailError } = await db.functions.invoke("send-email", { body: {
+    from: "Still Informatica <onboarding@resend.dev>",
+    reply_to: sellerEmail,
+    to: sellerEmail,
+    subject: `Novo pedido recebido — ${referenceId}`,
+    html: `<h1>Novo pedido recebido</h1><p><strong>Pedido:</strong> ${escapeHtml(referenceId)}</p><p><strong>Cliente:</strong> ${escapeHtml(customer.name)}</p><p><strong>E-mail:</strong> ${escapeHtml(customer.email)}</p><p><strong>Itens:</strong> ${escapeHtml(itemSummary)}</p><p><strong>Total:</strong> ${escapeHtml(totalText)}</p>`,
+   }});
+   if (emailError) console.error("Falha ao enviar e-mail de novo pedido");
+  } catch { console.error("Falha ao enviar e-mail de novo pedido"); }
+
+  try { await notifyWhatsApp(notificationMessage); }
+  catch { console.error("Falha ao enviar WhatsApp de novo pedido"); }
+
   return json({id:data.id,payment_url:paymentUrl,reference_id:referenceId,status:"CREATED"});
  }catch(error){if(error instanceof Response)return error;console.error("Checkout failed");return json({error:"Não foi possível iniciar o pagamento"},500);}
 });
